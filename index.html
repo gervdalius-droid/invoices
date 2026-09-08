@@ -1187,13 +1187,20 @@ const REG={
           buf=await res.blob();
         }
         onProgress&&onProgress(.94);
-        let text;
+        /* Most hosts serve a .gz as an opaque application/gzip body, which we
+           inflate ourselves. Some (GitHub Pages among them, depending on the
+           request) send Content-Encoding: gzip instead, so the browser has
+           already inflated it and the bytes in hand are plain text — inflating
+           twice would throw, so fall back to reading it as-is. */
+        let text=null;
         if(typeof DecompressionStream==='function'){
-          const ds=new DecompressionStream('gzip');
-          text=await new Response(buf.stream().pipeThrough(ds)).text();
-        }else{
-          throw new Error('DecompressionStream unsupported');
+          try{
+            const ds=new DecompressionStream('gzip');
+            text=await new Response(buf.stream().pipeThrough(ds)).text();
+          }catch(e){text=null;}
         }
+        if(text==null)text=await buf.text();
+        if(!/^\d+\t/.test(text))throw new Error('registry payload not recognised');
         onProgress&&onProgress(.98);
         this.text=text;
         this.norm=deacc(text.toLowerCase());
