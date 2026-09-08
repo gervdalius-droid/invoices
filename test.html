@@ -229,12 +229,12 @@ function tests(W,D){
   W.download=realDl;
 
   /* ---------------------------------------------------------------- */
-  grp('state migration v1 -> v2');
-  eq('current version', W.STATE_V, 2);
+  grp('state migration');
+  eq('current version', W.STATE_V, 3);
   const v1={v:1,invoices:[],customers:[],items:[],
             seller:{name:'A'},settings:{series:'X',showWords:false,showSign:false,vatRate:9}};
   W.adopt(JSON.parse(JSON.stringify(v1)));
-  eq('version bumped', W.S.v, 2);
+  eq('version bumped', W.S.v, 3);
   eq('brand created', typeof W.S.brand, 'object');
   eq('showWords moved into brand', W.S.brand.showWords, false);
   eq('showSign moved into brand', W.S.brand.showSign, false);
@@ -244,7 +244,117 @@ function tests(W,D){
   eq('seller defaults filled', W.S.seller.banks.length, 1);
   W.adopt({invoices:[],customers:[],items:[]});
   eq('a fresh doc gets brand defaults', W.S.brand.template, 'modern');
-  eq('migrating twice is a no-op', W.migrate({v:2,brand:{template:'classic'}}).brand.template, 'classic');
+  ok('v1 doc gains waybill collections',
+     Array.isArray(W.S.waybills) && Array.isArray(W.S.fleet) && Array.isArray(W.S.drivers));
+  const v2={v:2,invoices:[],customers:[],items:[],brand:{template:'classic'},settings:{series:'Y'}};
+  const m2=W.migrate(JSON.parse(JSON.stringify(v2)));
+  eq('v2 -> v3 keeps the brand', m2.brand.template, 'classic');
+  eq('v2 -> v3 bumps the version', m2.v, 3);
+  eq('migrating a current doc is a no-op',
+     W.migrate({v:3,brand:{template:'minimal'},waybills:[{id:'x'}]}).waybills.length, 1);
+
+  /* ---------------------------------------------------------------- */
+  grp('važtaraštis');
+  W.S.settings.wbSeries='VŽ';W.S.settings.wbFormat='{S}-{YYYY}-{NNNN}';W.S.settings.wbNext=1;
+  W.S.waybills=[];W.S.fleet=[];W.S.drivers=[];
+  W.S.seller={...W.S.seller,name:'Vežėjas UAB',code:'302475348',vat:'LT100005781213',
+              address:'Vilnius, Gedimino pr. 1',director:'R. G.'};
+  const yr2=new Date().getFullYear();
+  eq('waybill numbering is separate', W.makeWbNumber(3), 'VŽ-'+yr2+'-0003');
+  eq('invoice numbering unaffected', W.makeNumber(3), 'SF-'+yr2+'-0003');
+  ok('the two series never collide', W.makeWbNumber(1)!==W.makeNumber(1));
+
+  W.newWaybill();
+  ok('editor opened', W.VIEW==='waybill' && !!W.WB);
+  eq('number assigned', W.WB.no, 'VŽ-'+yr2+'-0001');
+  eq('consignor defaults to the seller', W.WB.consignor.name, 'Vežėjas UAB');
+  eq('carrier defaults to us', W.WB.carrierSelf, true);
+  eq('one blank cargo line', W.WB.lines.length, 1);
+  ok('save refused without a consignee', W.commitWaybill()===false);
+  W.WB.consignee={name:'UAB Gavėjas',code:'123456789',vat:'',address:'Kaunas, Laisvės al. 1'};
+  ok('save refused without cargo', W.commitWaybill()===false);
+  W.WB.lines=[{id:'a',name:'Virtuvės baldai',code:'K-1',unit:'kompl.',qty:1,packs:6,weight:240.5,value:4850},
+              {id:'b',name:'Stalviršis',code:'S-2',unit:'vnt',qty:2,packs:2,weight:59.5,value:290}];
+  W.WB.vehicle='ABC 123 Mercedes Sprinter';W.WB.driver='J. Jonaitis';
+  W.WB.loadAddr='Vilnius, Gedimino pr. 1';W.WB.unloadAddr='Kaunas, Laisvės al. 1';
+  ok('save accepted', W.commitWaybill()===true);
+  eq('stored', W.S.waybills.length, 1);
+  eq('next waybill number advanced', W.S.settings.wbNext, 2);
+  eq('invoice counter untouched', W.S.settings.next, 1);
+
+  const tot=W.wbTotals(W.S.waybills[0]);
+  eq('packages summed', tot.packs, 8);
+  near('weight summed', tot.weight, 300);
+  near('value summed', tot.value, 5140);
+
+  eq('a saved waybill is issued, not draft', W.wbStatus({status:'issued'}), 'issued');
+  eq('delivered wins', W.wbStatus({status:'delivered'}), 'delivered');
+  eq('draft stays draft', W.wbStatus({status:'draft'}), 'draft');
+
+  /* invoice -> waybill */
+  W.S.invoices=[];W.S.settings.next=1;
+  W.newInvoice();
+  const wbCust={id:'wc1',kind:'company',name:'UAB Pirkėjas',code:'987654321',vat:'LT987654313',address:'Klaipėda, Taikos pr. 5'};
+  W.S.customers.push(wbCust);
+  W.setBuyer(wbCust);
+  W.EDIT.lines=[{id:'l1',name:'Spinta',qty:3,unit:'vnt',price:400,disc:0,vat:21}];
+  W.commitInvoice();
+  const srcInv=W.S.invoices[0];
+  W.newWaybill(srcInv);
+  eq('linked to the invoice', W.WB.invoiceId, srcInv.id);
+  eq('buyer became the consignee', W.WB.consignee.name, 'UAB Pirkėjas');
+  eq('consignee keeps the company code', W.WB.consignee.code, '987654321');
+  eq('delivery address prefilled', W.WB.unloadAddr, 'Klaipėda, Taikos pr. 5');
+  eq('invoice lines became cargo', W.WB.lines.length, 1);
+  eq('cargo name carried', W.WB.lines[0].name, 'Spinta');
+  eq('cargo quantity carried', W.WB.lines[0].qty, 3);
+  near('cargo value is the line net', W.WB.lines[0].value, 1200);
+  ok('notes reference the invoice', String(W.WB.notes).indexOf(srcInv.no)>=0);
+  ok('weight is left blank for the user', W.WB.lines[0].weight===0);
+  W.commitWaybill();
+  eq('two waybills now', W.S.waybills.length, 2);
+
+  /* waybill -> invoice */
+  const wbForInv=W.S.waybills[1];
+  W.S.settings.vatRate=21;W.S.settings.vatPayer=true;
+  W.invoiceFromWaybill(wbForInv);
+  eq('invoice editor opened', W.VIEW, 'editor');
+  eq('consignee became the buyer', W.EDIT.buyer.name, 'UAB Pirkėjas');
+  eq('cargo became invoice lines', W.EDIT.lines.length, 1);
+  near('unit price derived from value/qty', W.EDIT.lines[0].price, 400);
+  eq('VAT rate applied', W.EDIT.lines[0].vat, 21);
+  ok('notes reference the waybill', String(W.EDIT.notes).indexOf(wbForInv.no)>=0);
+  near('invoice total round-trips', W.calc(W.EDIT).total, 1452);
+  W.EDIT=null;
+
+  /* printed document */
+  W.WB=null;
+  const wbDoc=W.waybillHtml(W.S.waybills[0],{standalone:true});
+  ok('titled as a consignment note', wbDoc.indexOf(W.t('wbTitle'))>=0);
+  ok('carries the waybill number', wbDoc.indexOf('VŽ-'+yr2+'-0001')>=0);
+  ok('shows the consignor', wbDoc.indexOf('Vežėjas UAB')>=0);
+  ok('shows the consignee', wbDoc.indexOf('UAB Gavėjas')>=0);
+  ok('shows the vehicle', wbDoc.indexOf('ABC 123 Mercedes Sprinter')>=0);
+  ok('shows the driver', wbDoc.indexOf('J. Jonaitis')>=0);
+  ok('shows both route ends',
+     wbDoc.indexOf('Vilnius, Gedimino pr. 1')>=0 && wbDoc.indexOf('Kaunas, Laisvės al. 1')>=0);
+  eq('one row per cargo line', (wbDoc.match(/<tr><td class="c">\d+<\/td>/g)||[]).length, 2);
+  ok('has three signature blocks', (wbDoc.match(/class="sig"/g)||[]).length===3);
+  ok('signature blocks are labelled for all three parties',
+     wbDoc.indexOf(W.t('wbSignConsignor'))>=0 && wbDoc.indexOf(W.t('wbSignCarrier'))>=0
+     && wbDoc.indexOf(W.t('wbSignConsignee'))>=0);
+  ok('standalone omits the print button', wbDoc.indexOf('<div class="noprint">')<0);
+  ok('non-standalone has the print button', W.waybillHtml(W.S.waybills[0]).indexOf('<div class="noprint">')>=0);
+  /* branding is shared with the invoice */
+  W.S.brand.accent='#b45309';
+  ok('waybill follows the invoice accent colour',
+     W.waybillHtml(W.S.waybills[0],{standalone:true}).indexOf('#b45309')>=0);
+  W.S.brand.accent='#2f54eb';
+  const delivered={...W.S.waybills[0],status:'delivered'};
+  ok('delivered stamp shows', W.waybillHtml(delivered,{standalone:true}).indexOf('<div class="paidmark">')>=0);
+  ok('undelivered has no stamp', wbDoc.indexOf('<div class="paidmark">')<0);
+
+  W.S.waybills=[];W.S.invoices=[];W.S.customers=[];W.S.settings.next=1;W.S.settings.wbNext=1;
 
   /* ---------------------------------------------------------------- */
   grp('branding');
@@ -409,7 +519,7 @@ function rest2(W,D){
   /* ---------------------------------------------------------------- */
   grp('rendering');
   W.S.invoices=[];W.S.customers=[];W.EDIT=null;W.S.seller.name='';W.saveNow();
-  ['dash','invoices','customers','items','settings'].forEach(v=>{
+  ['dash','invoices','waybills','customers','items','settings'].forEach(v=>{
     W.go(v);
     ok('renders '+v, D.querySelector('#p-'+v).innerHTML.length>200);
   });
@@ -422,7 +532,13 @@ function rest2(W,D){
   ok('editor renders the line table', !!D.querySelector('#linesBody tr'));
   ok('totals block rendered', D.querySelector('#edTotals').innerHTML.includes('0,00')
      || D.querySelector('#edTotals').innerHTML.includes('0.00'));
-  W.EDIT=null;W.go('dash');
+  W.EDIT=null;
+  W.newWaybill();
+  ok('waybill editor renders a consignee search box', !!D.querySelector('#wbConsQ'));
+  ok('waybill editor renders the cargo table', !!D.querySelector('#wbBody tr'));
+  ok('waybill tab appears only while one is open', !!D.querySelector('[data-tab="waybill"]'));
+  W.WB=null;W.go('dash');
+  ok('waybill tab hides again', !D.querySelector('[data-tab="waybill"]'));
 
   /* clean up so a manual visit to index.html starts fresh */
   W.localStorage.removeItem('inv_state_v1');
@@ -458,6 +574,7 @@ async function zipTests(W){
   ok('has one HTML per invoice', names.filter(n=>/^.*saskaitos\/.*\.html$/.test(n)).length===1);
   ok('has one XML per invoice', names.filter(n=>/\.xml$/.test(n)).length===1);
   ok('has a readme', names.some(n=>/SKAITYK\.txt$/.test(n)));
+  ok('no waybill files when there are none', !names.some(n=>/vaztarasciai/.test(n)));
   ok('everything sits under one dated folder', names.every(n=>/^saskaitos-\d{4}-\d{2}-\d{2}\//.test(n)));
 
   const lineCsv=files.find(f=>/eilutes\.csv$/.test(f.name)).text;
@@ -486,10 +603,29 @@ async function zipTests(W){
     off+=46+nlen+dv.getUint16(off+30,true)+dv.getUint16(off+32,true);
   }
   eq('every central entry name matches', seen, files.length);
+
+  /* the archive must pick up waybills too */
+  W.S.waybills=[{id:'w1',no:'VZ-1',date:'2026-01-06',seq:1,
+    consignor:{name:'A'},carrier:{name:'A'},consignee:{name:'B',code:'1'},
+    loadAddr:'X',unloadAddr:'Y',unloadDate:'2026-01-07',vehicle:'AAA 111',driver:'D',
+    lines:[{id:'l',name:'Dėžė',code:'',unit:'vnt',qty:1,packs:2,weight:10,value:5}],
+    status:'issued',notes:''}];
+  let blob2=null;
+  const rc2=W.URL.createObjectURL;
+  W.URL.createObjectURL=b=>{blob2=b;return 'blob:stub';};
+  const files2=await W.exportEverything();
+  W.URL.createObjectURL=rc2;
+  const n2=files2.map(f=>f.name);
+  ok('archive has the waybill register', n2.some(n=>/vaztarasciai\.csv$/.test(n)));
+  ok('archive has one HTML per waybill', n2.filter(n=>/vaztarasciai\/.*\.html$/.test(n)).length===1);
+  const wbCsv=files2.find(f=>/vaztarasciai\.csv$/.test(f.name)).text;
+  ok('waybill CSV names the vehicle', wbCsv.indexOf('AAA 111')>=0);
+  eq('waybill CSV has a header and one row', wbCsv.trim().split('\r\n').length, 2);
+  W.S.waybills=[];
   ok('entries were actually deflated', deflated>0);
   /* the local header of the first entry must agree with its CRC */
   eq('first local header signature', dv.getUint32(0,true), 0x04034b50);
-  W.S.invoices=[];W.S.customers=[];W.S.items=[];
+  W.S.invoices=[];W.S.customers=[];W.S.items=[];W.S.waybills=[];
 }
 </script>
 </body></html>

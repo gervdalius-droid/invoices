@@ -19,6 +19,8 @@ python3 serve.py 9000       # any other port
 | **Apžvalga** | outstanding / overdue / month revenue / month VAT, turnover bars, overdue list |
 | **Sąskaitos** | all invoices, filter by status + year, free-text search, CSV export |
 | **Sąskaita** | the editor — buyer, lines, VAT, totals, payments, PDF, e-invoice XML |
+| **Važtaraščiai** | consignment notes, filterable by delivered / not delivered |
+| **Važtaraštis** | the waybill editor — three parties, route, vehicle, driver, cargo |
 | **Pirkėjai** | customers, manual or straight from the company registry |
 | **Prekės ir paslaugos** | catalogue of what you sell, dropped into an invoice with one click |
 | **Nustatymai** | seller details, logo, bank accounts, numbering, defaults, backup |
@@ -33,9 +35,9 @@ total, the amount in words, bank details and signature lines.
 
 Exports: **PDF** (browser print), **CSV** (semicolon + BOM, opens straight in
 Excel), **UBL 2.1 / EN 16931 XML** e-invoice, **JSON** backup — and
-**Export everything**, one ZIP holding the JSON backup, four CSVs (register,
-line-level, customers, catalogue) and every invoice as both standalone HTML and
-UBL XML. The archive is built in the browser with a hand-rolled ZIP writer
+**Export everything**, one ZIP holding the JSON backup, the CSVs (invoice
+register, line-level, customers, catalogue, waybill register) and every invoice
+as standalone HTML plus UBL XML, and every waybill as standalone HTML. The archive is built in the browser with a hand-rolled ZIP writer
 (`CompressionStream('deflate-raw')`, stored fallback); a test reads the central
 directory back out of the produced blob.
 
@@ -44,7 +46,8 @@ directory back out of the produced blob.
 Settings → **Sąskaitos išvaizda** restyles the printed document with a live
 preview beside the controls, rendering your most recent real invoice:
 
-- three templates — **modern**, **classic**, **minimal**
+- three templates — **modern**, **classic**, **minimal** (they style the
+  važtaraštis too)
 - accent colour (eight presets plus a picker), typeface, logo height
 - a free line under the company name
 - toggles for logo, line numbers, unit column, VAT column, amount in words,
@@ -70,6 +73,28 @@ the app stops and asks which side wins. Same on first connect to a workspace
 that already holds data.
 
 The SQL to create the table is in the app (Settings → *SQL lentelei sukurti*).
+
+## Važtaraštis (consignment note)
+
+The shipping document that travels with the goods, carrying what the Kelių
+transporto kodeksas 29 str. and the vidaus vežimo taisyklės ask for: three
+parties (**siuntėjas / vežėjas / gavėjas**), the route with loading and delivery
+dates, vehicle, trailer, driver and licence, the cargo with packages, gross
+weight and value, instructions, and **three signature blocks** — handed over,
+taken for carriage, received.
+
+The fast path is one click. Open an invoice, hit **Sukurti važtaraštį**: the
+seller becomes the consignor, the buyer the consignee, the delivery address is
+prefilled and the invoice lines become cargo (weight is left blank, because an
+invoice never knows it). It also runs the other way — **Sukurti sąskaitą** on a
+waybill for the deliver-first, bill-later order of work, deriving unit prices
+from cargo value ÷ quantity.
+
+Waybills have their **own series and counter** (`VŽ-2026-0001` by default) so
+the two numbering runs can never collide, and their own status (draft → issued →
+delivered). Settings holds a small fleet and driver list that fill the vehicle
+and driver fields from a dropdown. The printed note shares the invoice branding —
+same logo, accent, typeface and template.
 
 ## The buyer picker
 
@@ -103,7 +128,7 @@ of querying them live from the browser.
 
 ```bash
 python3 serve.py &
-open http://localhost:8741/test.html        # 197 in-browser assertions
+open http://localhost:8741/test.html        # 263 in-browser assertions
 python3 tools/e2e/e2e.py                    # headless Chrome, real registry
 ```
 
@@ -134,3 +159,8 @@ land in `tools/e2e/shots/`.
   into `base.settings` after `Object.assign(base, p)` is a no-op, because `base`
   already points at the stored object.
 - Cloud sync stores only tokens, never the password. Signing out clears them.
+- Do **not** reset test state with `localStorage.clear()` + reload: the app saves
+  on `beforeunload`, so the reload writes the old state straight back. Use
+  `adopt({}); saveNow()` instead — `tools/e2e/e2e.py` does.
+- Invoices and važtaraščiai keep **separate counters** (`next` / `wbNext`) and
+  separate formats. `formatNo()` is the shared formatter.

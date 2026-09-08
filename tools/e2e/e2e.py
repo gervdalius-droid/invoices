@@ -24,8 +24,10 @@ def expect(cond, msg, extra=""):
 with Chrome(width=1440, height=980, dpr=1, mobile=False, port=9341,
             profile="/tmp/cdp-invoices") as c:
     c.goto(URL, wait=2.0)
-    c.eval("localStorage.clear();location.reload()")
-    time.sleep(2.0)
+    # NOT localStorage.clear() + reload: the app saves on beforeunload, so the
+    # reload writes the old state straight back. Reset in memory, then persist.
+    c.eval("adopt({});saveNow();EDIT=null;WB=null;go('dash')")
+    time.sleep(0.5)
 
     print("— boot")
     expect(c.eval("typeof S==='object' && VIEW==='dash'"), "app booted on the dashboard")
@@ -81,11 +83,69 @@ with Chrome(width=1440, height=980, dpr=1, mobile=False, port=9341,
     expect((r.get("buyer") or {}).get("vat"), "buyer carries the VMI VAT number")
     expect(r.get("due") != r.get("date"), "due date is later than the issue date")
 
+    print("— važtaraštis from that invoice")
+    r = c.eval("""(function(){
+      S.settings.wbPlace='Vilnius';
+      S.fleet=[{id:'f1',plate:'JAG 470',make:'Mercedes Sprinter',trailer:''}];
+      S.drivers=[{id:'d1',name:'Jonas Jonaitis',doc:'AA123456'}];
+      newWaybill(S.invoices[0]);
+      WB.lines[0].packs=6; WB.lines[0].weight=241.5;
+      WB.lines[1].packs=2; WB.lines[1].weight=98.4;
+      WB.vehicle='JAG 470 Mercedes Sprinter'; WB.driver='Jonas Jonaitis'; WB.driverDoc='AA123456';
+      WB.unloadDate=addDays(today(),1);
+      var okSave=commitWaybill();
+      var tt=wbTotals(S.waybills[0]);
+      return {okSave:okSave,no:WB.no,linked:WB.invoiceId===S.invoices[0].id,
+              consignee:WB.consignee.name,consigneeCode:WB.consignee.code,
+              unload:WB.unloadAddr,packs:tt.packs,weight:tt.weight,value:tt.value,
+              cargo:WB.lines.length,wbNext:S.settings.wbNext,invNext:S.settings.next};
+    })()""")
+    print("   ", json.dumps(r, ensure_ascii=False)[:340])
+    expect(r.get("okSave") is True, "waybill saved")
+    expect(r.get("linked"), "waybill linked to the invoice")
+    expect(r.get("no", "").startswith("V"), "waybill uses its own series", r.get("no"))
+    expect(r.get("invNext") == 2 and r.get("wbNext") == 2, "the two counters advance independently", r)
+    expect(r.get("consigneeCode"), "consignee carries the registry company code")
+    expect(r.get("unload"), "delivery address prefilled from the buyer")
+    expect(r.get("cargo") == 2, "both invoice lines became cargo", r.get("cargo"))
+    expect(r.get("packs") == 8, "packages summed", r.get("packs"))
+    expect(abs(r.get("weight", 0) - 339.9) < 0.01, "gross weight summed", r.get("weight"))
+    expect(abs(r.get("value", 0) - 5130) < 0.01, "cargo value equals the invoice net", r.get("value"))
+
+    print("— printed važtaraštis")
+    r = c.eval("""(function(){
+      var w={document:{open:function(){},close:function(){},write:function(h){window.__wb=h}}};
+      var real=window.open; window.open=function(){return w};
+      printWaybill(S.waybills[0]); window.open=real;
+      var d=window.__wb||'';
+      return {len:d.length,
+              title:d.indexOf('KROVINIO VAŽTARAŠTIS')>=0,
+              consignor:d.indexOf('Mano Įmonė UAB')>=0,
+              consignee:d.indexOf('MAXIMA LT, UAB')>=0,
+              vehicle:d.indexOf('JAG 470 Mercedes Sprinter')>=0,
+              driver:d.indexOf('Jonas Jonaitis')>=0,
+              invoiceRef:d.indexOf(S.invoices[0].no)>=0,
+              sigs:(d.match(/class="sig"/g)||[]).length,
+              rows:(d.match(/<tr><td class="c">\\d+<\\/td>/g)||[]).length};
+    })()""")
+    print("   ", json.dumps(r, ensure_ascii=False))
+    expect(r.get("title"), "titled KROVINIO VAŽTARAŠTIS")
+    expect(r.get("consignor"), "consignor printed")
+    expect(r.get("consignee"), "consignee printed")
+    expect(r.get("vehicle"), "vehicle printed")
+    expect(r.get("driver"), "driver printed")
+    expect(r.get("invoiceRef"), "related invoice number printed")
+    expect(r.get("sigs") == 3, "three signature blocks", r.get("sigs"))
+    expect(r.get("rows") == 2, "both cargo rows printed", r.get("rows"))
+
     print("— screens")
     for view, name in [("dash", "1-dashboard"), ("invoices", "2-invoices"),
-                       ("editor", "3-editor"), ("customers", "4-customers"),
-                       ("settings", "5-settings")]:
-        c.eval("if('%s'==='editor'){openInvoice(S.invoices[0].id)}else{go('%s')}" % (view, view))
+                       ("editor", "3-editor"), ("waybills", "4-waybills"),
+                       ("waybill", "5-waybill"), ("customers", "6-customers"),
+                       ("settings", "7-settings")]:
+        c.eval("if('%s'==='editor'){openInvoice(S.invoices[0].id)}"
+               "else if('%s'==='waybill'){openWaybill(S.waybills[0].id)}else{go('%s')}"
+               % (view, view, view))
         time.sleep(0.45)
         c.shot(os.path.join(SHOTS, name + ".png"))
         h = c.eval("document.querySelector('#p-%s').innerHTML.length" % view)

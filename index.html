@@ -234,19 +234,26 @@
     .card>.head{gap:8px}
     /* invoice lines stack into one card per line - a phone cannot usefully
        scroll a 8-column table sideways while typing into it */
-    #linesTbl,#linesTbl tbody{display:block}
-    #linesTbl thead{display:none}
-    #linesTbl tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;
+    #linesTbl,#linesTbl tbody,#wbTbl,#wbTbl tbody,#wbTbl tfoot{display:block}
+    #linesTbl thead,#wbTbl thead{display:none}
+    #linesTbl tr,#wbTbl tbody tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;
       border:1px solid var(--line);border-radius:10px;padding:11px;margin:0 0 10px;background:#fff}
-    #linesTbl td{display:block;border:0;padding:0;white-space:normal;width:auto!important;min-width:0}
-    #linesTbl td::before{content:attr(data-lab);display:block;font-size:9.5px;text-transform:uppercase;
-      letter-spacing:.06em;color:var(--ink2);font-weight:700;margin-bottom:3px}
+    #linesTbl td,#wbTbl td{display:block;border:0;padding:0;white-space:normal;width:auto!important;min-width:0}
+    #linesTbl td::before,#wbTbl td::before{content:attr(data-lab);display:block;font-size:9.5px;
+      text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);font-weight:700;margin-bottom:3px}
     #linesTbl td[data-c=name]{grid-column:1/-1}
     #linesTbl td[data-c=sum]{grid-column:1/4;text-align:right;align-self:end;font-size:15px;font-weight:700}
     #linesTbl td[data-c=del]{grid-column:4;text-align:right;align-self:end}
-    #linesTbl td[data-c=del]::before{content:'';margin:0}
-    #linesTbl td input{width:100%}
-    #linesTbl td input[type=number]{min-width:0}
+    #linesTbl td[data-c=del]::before,#wbTbl td[data-c=del]::before{content:'';margin:0}
+    #wbTbl tbody tr{align-items:end}
+    #wbTbl td[data-c=name]{grid-column:1/4}
+    #wbTbl td[data-c=del]{grid-column:4;text-align:right;align-self:end}
+    #wbTbl td[data-c=code]{grid-column:1/3}
+    #wbTbl tfoot tr{display:flex;justify-content:space-between;gap:10px;padding:9px 11px}
+    #wbTbl tfoot td{display:inline-block;border:0}
+    #wbTbl tfoot td[colspan]{font-weight:700}
+    #linesTbl td input,#wbTbl td input{width:100%}
+    #linesTbl td input[type=number],#wbTbl td input[type=number]{min-width:0}
     .card>.body.tight .tblwrap{padding:11px 11px 1px}
     .modal{max-height:92vh;width:100%}
     .modal .mf{flex-direction:column-reverse}
@@ -280,6 +287,8 @@
   <section class="panel" id="p-dash"></section>
   <section class="panel" id="p-invoices"></section>
   <section class="panel" id="p-editor"></section>
+  <section class="panel" id="p-waybills"></section>
+  <section class="panel" id="p-waybill"></section>
   <section class="panel" id="p-customers"></section>
   <section class="panel" id="p-items"></section>
   <section class="panel" id="p-settings"></section>
@@ -450,6 +459,53 @@ const I18N={
   setExportAll:"⬇ Eksportuoti viską (ZIP)",
   setExportAllSub:"JSON + CSV + kiekviena sąskaita HTML ir XML formatu",
   exportWorking:"Ruošiama…",exportAllDone:"Eksportuota",exportFiles:"failų",
+
+  /* važtaraštis */
+  tabWaybills:"Važtaraščiai",tabWaybill:"Važtaraštis",
+  wbNew:"Naujas važtaraštis",wbTitle:"KROVINIO VAŽTARAŠTIS",
+  wbNo:"Važtaraščio Nr.",wbDate:"Surašymo data",wbPlace:"Surašymo vieta",
+  wbConsignor:"Siuntėjas",wbConsignee:"Gavėjas",wbCarrier:"Vežėjas",
+  wbPickConsignee:"Gavėjas — pradėkite rašyti pavadinimą arba įmonės kodą",
+  wbCarrierSelf:"Vežu pats",wbCarrierPick:"Vežėjas — įmonė arba vardas",
+  wbRoute:"Maršrutas",
+  wbLoadAddr:"Pakrovimo vieta",wbLoadDate:"Pakrovimo data",
+  wbUnloadAddr:"Iškrovimo vieta",wbUnloadDate:"Pristatymo data",
+  wbTransport:"Transporto priemonė",
+  wbVehicle:"Valst. numeris ir markė",wbTrailer:"Priekaba",
+  wbDriver:"Vairuotojas",wbDriverDoc:"Vairuotojo pažymėjimas / AK",
+  wbCargo:"Krovinys",wbAddLine:"＋ Eilutė",
+  wbLnName:"Krovinio pavadinimas",wbLnCode:"Kodas",wbLnUnit:"Mato vnt.",
+  wbLnQty:"Kiekis",wbLnPacks:"Vietų sk.",wbLnWeight:"Bruto masė, kg",wbLnValue:"Vertė, €",
+  wbTotals:"Iš viso",wbTotPacks:"Vietų:",wbTotWeight:"Masė, kg:",wbTotValue:"Vertė, €:",
+  wbNotes:"Nurodymai ir pastabos",
+  wbNotesPh:"Pvz. krovinys trapus, pristatyti iki 12 val., sutarties nr.…",
+  wbInvoice:"Susijusi sąskaita",wbNoInvoice:"nesusieta",
+  wbFromInvoice:"Sukurti važtaraštį",wbToInvoice:"Sukurti sąskaitą",
+  wbCopyLines:"Perkelti sąskaitos eilutes",
+  wbStatusDraft:"Juodraštis",wbStatusIssued:"Išrašytas",wbStatusDelivered:"Pristatytas",
+  wbMarkDelivered:"Pažymėti pristatytu",wbReceivedBy:"Krovinį priėmė",
+  wbDelivered:"Pristatyta",
+  wbNone:"Važtaraščių dar nėra.",
+  wbNoneSub:"Važtaraštis lydi krovinį. Greičiausias būdas — atidaryti sąskaitą ir paspausti „Sukurti važtaraštį“.",
+  wbNoConsignee:"Pasirinkite gavėją",wbNoLines:"Pridėkite bent vieną krovinio eilutę",
+  wbBack:"← Važtaraščių sąrašas",
+  wbSearch:"Ieškoti pagal numerį, gavėją, numerį…",
+  wbAll:"Visi",wbOpen:"Nepristatyti",
+  colWbNo:"Nr.",colRoute:"Maršrutas",colVehicle:"Transportas",colPacks:"Vietų",colWeight:"kg",
+  wbSignConsignor:"Krovinį perdavė (siuntėjas)",
+  wbSignCarrier:"Krovinį vežti priėmė (vežėjas / vairuotojas)",
+  wbSignConsignee:"Krovinį priėmė (gavėjas)",
+  wbSignHint:"Vardas, pavardė, parašas, data",
+  wbSheetOf:"Lapas",
+  setWaybills:"Važtaraščių numeracija",
+  setWbSeries:"Serija",setWbNext:"Kitas numeris",setWbFormat:"Numerio formatas",
+  setWbPlace:"Numatyta surašymo vieta",setWbNote:"Numatyti nurodymai",
+  setFleet:"Transporto priemonės",setFleetAdd:"＋ Pridėti",
+  setPlate:"Valst. numeris",setMake:"Markė / modelis",setTrailer:"Priekaba",
+  setDrivers:"Vairuotojai",setDriversAdd:"＋ Pridėti",
+  setDriverName:"Vardas, pavardė",setDriverDoc:"Pažymėjimo Nr.",
+  wbPick:"Pasirinkti",
+  kpiToDeliver:"Neišvežta",kpiToDeliverSub:"važtaraščių laukia",
   copyOf:"kopija"
  },
  en:{
@@ -591,6 +647,53 @@ const I18N={
   setExportAll:"⬇ Export everything (ZIP)",
   setExportAllSub:"JSON + CSV + every invoice as HTML and XML",
   exportWorking:"Preparing…",exportAllDone:"Exported",exportFiles:"files",
+
+  /* consignment note */
+  tabWaybills:"Waybills",tabWaybill:"Waybill",
+  wbNew:"New waybill",wbTitle:"CONSIGNMENT NOTE",
+  wbNo:"Waybill No.",wbDate:"Date of issue",wbPlace:"Place of issue",
+  wbConsignor:"Consignor",wbConsignee:"Consignee",wbCarrier:"Carrier",
+  wbPickConsignee:"Consignee — start typing a name or company code",
+  wbCarrierSelf:"I carry it myself",wbCarrierPick:"Carrier — company or name",
+  wbRoute:"Route",
+  wbLoadAddr:"Place of loading",wbLoadDate:"Loading date",
+  wbUnloadAddr:"Place of delivery",wbUnloadDate:"Delivery date",
+  wbTransport:"Vehicle",
+  wbVehicle:"Plate and make",wbTrailer:"Trailer",
+  wbDriver:"Driver",wbDriverDoc:"Licence / ID",
+  wbCargo:"Cargo",wbAddLine:"＋ Line",
+  wbLnName:"Description of goods",wbLnCode:"Code",wbLnUnit:"Unit",
+  wbLnQty:"Qty",wbLnPacks:"Packages",wbLnWeight:"Gross weight, kg",wbLnValue:"Value, €",
+  wbTotals:"Total",wbTotPacks:"Packages:",wbTotWeight:"Weight, kg:",wbTotValue:"Value, €:",
+  wbNotes:"Instructions and remarks",
+  wbNotesPh:"e.g. fragile, deliver before noon, contract no.…",
+  wbInvoice:"Related invoice",wbNoInvoice:"not linked",
+  wbFromInvoice:"Create waybill",wbToInvoice:"Create invoice",
+  wbCopyLines:"Copy the invoice lines",
+  wbStatusDraft:"Draft",wbStatusIssued:"Issued",wbStatusDelivered:"Delivered",
+  wbMarkDelivered:"Mark as delivered",wbReceivedBy:"Goods received by",
+  wbDelivered:"Delivered",
+  wbNone:"No waybills yet.",
+  wbNoneSub:"A waybill travels with the goods. Fastest route: open an invoice and hit “Create waybill”.",
+  wbNoConsignee:"Pick a consignee",wbNoLines:"Add at least one cargo line",
+  wbBack:"← Waybill list",
+  wbSearch:"Search by number, consignee, plate…",
+  wbAll:"All",wbOpen:"Not delivered",
+  colWbNo:"No.",colRoute:"Route",colVehicle:"Vehicle",colPacks:"Pkgs",colWeight:"kg",
+  wbSignConsignor:"Handed over by (consignor)",
+  wbSignCarrier:"Taken for carriage by (carrier / driver)",
+  wbSignConsignee:"Received by (consignee)",
+  wbSignHint:"Name, signature, date",
+  wbSheetOf:"Sheet",
+  setWaybills:"Waybill numbering",
+  setWbSeries:"Series",setWbNext:"Next number",setWbFormat:"Number format",
+  setWbPlace:"Default place of issue",setWbNote:"Default instructions",
+  setFleet:"Vehicles",setFleetAdd:"＋ Add",
+  setPlate:"Plate",setMake:"Make / model",setTrailer:"Trailer",
+  setDrivers:"Drivers",setDriversAdd:"＋ Add",
+  setDriverName:"Name",setDriverDoc:"Licence no.",
+  wbPick:"Pick",
+  kpiToDeliver:"To deliver",kpiToDeliverSub:"waybills waiting",
   copyOf:"copy"
  }
 };
@@ -604,7 +707,7 @@ const t=k=>{const d=I18N[LANG];if(d&&d[k]!==undefined)return d[k];if(I18N.en[k]!
 const KEY='inv_state_v1', LANG_KEY='fab_lang'; /* same lang key the sibling apps use */
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
-const STATE_V=2;
+const STATE_V=3;
 /* Everything about how the printed invoice LOOKS lives here, so the document
    can be restyled without touching printInvoice's structure. */
 function blankBrand(){
@@ -628,21 +731,36 @@ function blankState(){
             banks:[{bank:"",iban:"",swift:""}]},
     settings:{series:"SF",next:1,format:"{S}-{YYYY}-{NNNN}",vatRate:21,vatPayer:true,
               currency:"EUR",term:14,unit:"vnt",note:"",footer:"",
-              showDisc:false},
+              showDisc:false,
+              /* važtaraštis gets its own series so the two never collide */
+              wbSeries:"VŽ",wbNext:1,wbFormat:"{S}-{YYYY}-{NNNN}",
+              wbPlace:"",wbNote:""},
     brand:blankBrand(),
-    customers:[],items:[],invoices:[]
+    customers:[],items:[],invoices:[],
+    waybills:[],
+    fleet:[],     /* {id, plate, make, trailer} */
+    drivers:[]    /* {id, name, doc} */
   };
 }
-/* v1 kept showWords / showSign under settings; v2 moved them into brand. */
+/* v1 kept showWords / showSign under settings; v2 moved them into brand.
+   v3 added važtaraščiai (consignment notes) with their own numbering. */
 function migrate(p){
-  if(!p||p.v>=2)return p;
-  p.brand=Object.assign(blankBrand(),p.brand||{});
-  if(p.settings){
-    if(p.settings.showWords!==undefined)p.brand.showWords=!!p.settings.showWords;
-    if(p.settings.showSign!==undefined)p.brand.showSign=!!p.settings.showSign;
-    delete p.settings.showWords;delete p.settings.showSign;
+  if(!p)return p;
+  if(p.v<2){
+    p.brand=Object.assign(blankBrand(),p.brand||{});
+    if(p.settings){
+      if(p.settings.showWords!==undefined)p.brand.showWords=!!p.settings.showWords;
+      if(p.settings.showSign!==undefined)p.brand.showSign=!!p.settings.showSign;
+      delete p.settings.showWords;delete p.settings.showSign;
+    }
+    p.v=2;
   }
-  p.v=2;
+  if(p.v<3){
+    p.waybills=p.waybills||[];
+    p.fleet=p.fleet||[];
+    p.drivers=p.drivers||[];
+    p.v=3;
+  }
   return p;
 }
 let S=blankState();
@@ -670,6 +788,7 @@ function adopt(p){
   S.brand.titles=Object.assign({invoice:"",simple:"",proforma:"",credit:""},(p.brand||{}).titles||{});
   if(!Array.isArray(S.seller.banks)||!S.seller.banks.length)S.seller.banks=[{bank:"",iban:"",swift:""}];
   S.customers=p.customers||[];S.items=p.items||[];S.invoices=p.invoices||[];
+  S.waybills=p.waybills||[];S.fleet=p.fleet||[];S.drivers=p.drivers||[];
   S.v=STATE_V;
   return S;
 }
@@ -953,11 +1072,10 @@ function invStatus(inv){
 const STATUS_LABEL={draft:'stDraft',sent:'stSent',paid:'stPaid',part:'stPart',over:'stOver'};
 
 /* ===================== numbering ===================== */
-function makeNumber(seq){
-  const s=S.settings,d=new Date();
-  const n=seq==null?s.next:seq;
-  return String(s.format||'{S}-{YYYY}-{NNNN}')
-    .replace(/\{S\}/g,s.series||'')
+function formatNo(fmt,series,n){
+  const d=new Date();
+  return String(fmt||'{S}-{YYYY}-{NNNN}')
+    .replace(/\{S\}/g,series||'')
     .replace(/\{YYYY\}/g,String(d.getFullYear()))
     .replace(/\{YY\}/g,String(d.getFullYear()).slice(2))
     .replace(/\{MM\}/g,String(d.getMonth()+1).padStart(2,'0'))
@@ -965,6 +1083,14 @@ function makeNumber(seq){
     .replace(/\{NNNN\}/g,String(n).padStart(4,'0'))
     .replace(/\{NNN\}/g,String(n).padStart(3,'0'))
     .replace(/\{N\}/g,String(n));
+}
+function makeNumber(seq){
+  const s=S.settings;
+  return formatNo(s.format,s.series,seq==null?s.next:seq);
+}
+function makeWbNumber(seq){
+  const s=S.settings;
+  return formatNo(s.wbFormat,s.wbSeries,seq==null?s.wbNext:seq);
 }
 </script>
 
@@ -1127,6 +1253,8 @@ const TABS=[
   {id:'dash',     ic:'▤', key:'tabDash'},
   {id:'invoices', ic:'▦', key:'tabInvoices'},
   {id:'editor',   ic:'✎', key:'tabEditor', hidden:()=>!EDIT},
+  {id:'waybills', ic:'⛟', key:'tabWaybills'},
+  {id:'waybill',  ic:'✎', key:'tabWaybill', hidden:()=>!WB},
   {id:'customers',ic:'☺', key:'tabCustomers'},
   {id:'items',    ic:'◈', key:'tabItems'},
   {id:'settings', ic:'⚙', key:'tabSettings'}
@@ -1151,6 +1279,7 @@ function go(v){
 }
 function render(){
   ({dash:renderDash,invoices:renderInvoices,editor:renderEditor,
+    waybills:renderWaybills,waybill:renderWaybill,
     customers:renderCustomers,items:renderItems,settings:renderSettings}[VIEW]||renderDash)();
   renderTabs();
 }
@@ -1210,6 +1339,7 @@ function renderDash(){
   const moNet=r2(mo.reduce((s,c)=>s+c.net,0)),moVat=r2(mo.reduce((s,c)=>s+c.vat,0)),moTot=r2(mo.reduce((s,c)=>s+c.total,0));
 
   const needSetup=!S.seller.name;
+  const toDeliver=S.waybills.filter(w=>wbStatus(w)!=='delivered').length;
   const overdue=live.filter(i=>invStatus(i)==='over')
                     .sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
   const recent=inv.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.seq||0)-(a.seq||0)).slice(0,8);
@@ -1239,6 +1369,11 @@ function renderDash(){
     <div class="kpi"><div class="kl">${esc(t('kpiVat'))}</div><div class="kv">${money(moVat)}</div>
       <div class="ks">${esc(t('kpiVatSub'))}</div></div>
   </div>
+  ${toDeliver?`<div class="card"><div class="body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+     <div class="grow"><div class="eyebrow">⛟ ${esc(t('kpiToDeliver'))}</div>
+       <div class="muted" style="margin-top:4px">${toDeliver} ${esc(t('kpiToDeliverSub'))}</div></div>
+     <button class="btn" id="dashWb">${esc(t('tabWaybills'))} →</button>
+   </div></div>`:''}
 
   <div class="card"><div class="body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
     <button class="btn primary lg" id="dashNew">＋ ${esc(t('newInvoice'))}</button>
@@ -1274,6 +1409,7 @@ function renderDash(){
   const sb=$('#dashSetupBtn');if(sb)sb.onclick=()=>go('settings');
   $('#dashNew').onclick=newInvoice;
   $('#dashAll').onclick=()=>go('invoices');
+  const dw=$('#dashWb');if(dw)dw.onclick=()=>go('waybills');
   bindInvRows($('#p-dash'));
 }
 
@@ -1499,6 +1635,7 @@ function renderEditor(){
     <button class="btn" id="edPdf">${esc(t('edPdf'))}</button>
     <button class="btn" id="edMail">${esc(t('edMail'))}</button>
     <button class="btn" id="edXml">${esc(t('edXml'))}</button>
+    <button class="btn" id="edWb">⛟ ${esc(t('wbFromInvoice'))}</button>
     <div class="grow"></div>
     ${EDIT.isNew?'':`<button class="btn" id="edPay">${esc(t('edPayments'))}</button>
       <button class="btn good" id="edPaid">${esc(t('edMarkPaid'))}</button>
@@ -1541,6 +1678,12 @@ function bindEditorTop(){
   $('#edPdf').onclick=()=>{if(commitInvoice())printInvoice(EDIT);};
   $('#edMail').onclick=()=>{if(commitInvoice())mailInvoice(EDIT);};
   $('#edXml').onclick=()=>{if(commitInvoice())exportUbl(EDIT);};
+  $('#edWb').onclick=()=>{
+    if(!commitInvoice())return;
+    const existing=S.waybills.find(w=>w.invoiceId===EDIT.id);
+    if(existing){openWaybill(existing.id);return;}
+    newWaybill(EDIT);
+  };
   const p=$('#edPay');if(p)p.onclick=()=>paymentsModal(EDIT);
   const pd=$('#edPaid');if(pd)pd.onclick=()=>{
     const c=calc(EDIT);
@@ -1871,6 +2014,494 @@ function loadRegistryWithProgress(onP){
 </script>
 
 <script>
+/* =========================================================================
+   Važtaraštis — the Lithuanian consignment note that travels with the goods.
+
+   Three parties (siuntėjas / vežėjas / gavėjas), a route, the vehicle and
+   driver, the cargo itself and three signature lines. Everything the Kelių
+   transporto kodeksas 29 str. and the vidaus vežimo taisyklės ask for.
+
+   The fast path is "make one from an invoice": the seller becomes the
+   consignor, the buyer the consignee and the invoice lines become cargo.
+   ========================================================================= */
+let WB=null;                       /* waybill open in the editor */
+let wbFilter={q:'',open:false};
+
+function blankWbLine(){
+  return {id:uid(),name:'',code:'',unit:S.settings.unit||'vnt',qty:1,packs:1,weight:0,value:0};
+}
+function newWaybill(from){
+  const s=S.settings;
+  WB={
+    id:uid(),seq:s.wbNext,no:makeWbNumber(s.wbNext),
+    date:today(),place:s.wbPlace||'',
+    invoiceId:null,
+    consignor:partyOf(S.seller),
+    consignee:null,
+    carrier:partyOf(S.seller),carrierSelf:true,
+    loadAddr:S.seller.address||'',loadDate:today(),
+    unloadAddr:'',unloadDate:'',
+    vehicle:'',trailer:'',driver:S.seller.director||'',driverDoc:'',
+    lines:[blankWbLine()],
+    notes:s.wbNote||'',
+    status:'draft',deliveredAt:'',receivedBy:'',
+    isNew:true
+  };
+  if(from)fillWbFromInvoice(WB,from);
+  go('waybill');
+}
+function partyOf(o){
+  return {name:o.name||'',code:o.code||'',vat:o.vat||'',address:o.address||'',
+          phone:o.phone||'',email:o.email||'',contact:o.contact||''};
+}
+/* Invoice -> waybill. Quantities carry over; weight is left to the user
+   because an invoice never knows it. */
+function fillWbFromInvoice(wb,inv){
+  wb.invoiceId=inv.id;
+  wb.consignee=Object.assign(partyOf(inv.buyer||{}),{});
+  wb.unloadAddr=(inv.buyer&&inv.buyer.address)||'';
+  wb.notes=[wb.notes,inv.no?(LANG==='lt'?'Pagal sąskaitą ':'Per invoice ')+inv.no:''].filter(Boolean).join('\n');
+  const lines=(inv.lines||[]).filter(l=>String(l.name||'').trim());
+  if(lines.length)wb.lines=lines.map(l=>({
+    id:uid(),name:l.name,code:'',unit:l.unit||S.settings.unit||'vnt',
+    qty:num(l.qty),packs:0,weight:0,value:r2(lineNet(l))}));
+  return wb;
+}
+function openWaybill(id){
+  const w=S.waybills.find(x=>x.id===id);
+  if(!w)return;
+  WB=JSON.parse(JSON.stringify(w));WB.isNew=false;
+  go('waybill');
+}
+function wbTotals(w){
+  const L=w.lines||[];
+  return {packs:L.reduce((s,l)=>s+num(l.packs),0),
+          weight:r2(L.reduce((s,l)=>s+num(l.weight),0)),
+          value:r2(L.reduce((s,l)=>s+num(l.value),0)),
+          qty:r2(L.reduce((s,l)=>s+num(l.qty),0))};
+}
+function wbStatus(w){return w.status==='delivered'?'delivered':(w.status==='draft'?'draft':'issued');}
+const WB_STATUS_LABEL={draft:'wbStatusDraft',issued:'wbStatusIssued',delivered:'wbStatusDelivered'};
+const WB_STATUS_PILL={draft:'draft',issued:'sent',delivered:'paid'};
+
+function commitWaybill(){
+  if(!WB)return false;
+  if(!WB.consignee||!WB.consignee.name){toast(t('wbNoConsignee'),true);return false;}
+  if(!(WB.lines||[]).some(l=>String(l.name||'').trim())){toast(t('wbNoLines'),true);return false;}
+  const copy=JSON.parse(JSON.stringify(WB));
+  delete copy.isNew;
+  const ix=S.waybills.findIndex(x=>x.id===copy.id);
+  if(ix>=0)S.waybills[ix]=copy;
+  else{
+    S.waybills.push(copy);
+    if(copy.seq>=S.settings.wbNext)S.settings.wbNext=copy.seq+1;
+  }
+  WB.isNew=false;
+  saveNow();
+  return true;
+}
+
+/* ---------- list ---------- */
+function renderWaybills(){
+  let list=S.waybills.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.seq||0)-(a.seq||0));
+  if(wbFilter.open)list=list.filter(w=>wbStatus(w)!=='delivered');
+  if(wbFilter.q){
+    const q=normQ(wbFilter.q);
+    list=list.filter(w=>normQ([w.no,(w.consignee&&w.consignee.name)||'',w.vehicle,w.driver,
+      w.unloadAddr,w.loadAddr].join(' ')).includes(q));
+  }
+  $('#p-waybills').innerHTML=`
+  <div class="card"><div class="head">
+    <input id="wbQ" placeholder="${esc(t('wbSearch'))}" value="${esc(wbFilter.q)}" style="max-width:320px">
+    <div class="btnrow">
+      <button class="btn sm ${wbFilter.open?'':'primary'}" data-wf="all">${esc(t('wbAll'))}</button>
+      <button class="btn sm ${wbFilter.open?'primary':''}" data-wf="open">${esc(t('wbOpen'))}</button>
+    </div>
+    <div class="grow"></div>
+    <span class="pill mono">${list.length}</span>
+    <button class="btn sm primary" id="wbNewBtn">＋ ${esc(t('wbNew'))}</button>
+  </div>
+  ${list.length?`<div class="body tight"><div class="tblwrap" style="border:0"><table><thead><tr>
+      <th>${esc(t('colWbNo'))}</th><th>${esc(t('colDate'))}</th><th>${esc(t('wbConsignee'))}</th>
+      <th>${esc(t('colRoute'))}</th><th>${esc(t('colVehicle'))}</th>
+      <th class="num">${esc(t('colPacks'))}</th><th class="num">${esc(t('colWeight'))}</th>
+      <th>${esc(t('colStatus'))}</th></tr></thead><tbody>
+      ${list.map(w=>{const tt=wbTotals(w),st=wbStatus(w);
+        const route=[(w.loadAddr||'').split(',')[0],(w.unloadAddr||'').split(',')[0]].filter(Boolean).join(' → ');
+        return `<tr class="clickable" data-wb="${w.id}">
+          <td class="mono"><b>${esc(w.no||'—')}</b></td>
+          <td class="mono">${esc(fmtDate(w.date))}</td>
+          <td>${esc((w.consignee&&w.consignee.name)||'—')}</td>
+          <td class="muted">${esc(route||'—')}</td>
+          <td class="mono">${esc(w.vehicle||'—')}</td>
+          <td class="num">${tt.packs||'—'}</td>
+          <td class="num">${tt.weight?money(tt.weight):'—'}</td>
+          <td><span class="pill ${WB_STATUS_PILL[st]}">${esc(t(WB_STATUS_LABEL[st]))}</span></td></tr>`;}).join('')}
+    </tbody></table></div></div>`
+    :`<div class="empty"><div class="big">${esc(t('wbNone'))}</div>${esc(t('wbNoneSub'))}</div>`}
+  </div>`;
+  const q=$('#wbQ');
+  q.oninput=()=>{wbFilter.q=q.value;renderWaybills();const e=$('#wbQ');e.focus();e.setSelectionRange(e.value.length,e.value.length);};
+  $$('#p-waybills [data-wf]').forEach(b=>b.onclick=()=>{wbFilter.open=b.dataset.wf==='open';renderWaybills();});
+  $('#wbNewBtn').onclick=()=>newWaybill();
+  $$('#p-waybills [data-wb]').forEach(tr=>tr.onclick=()=>openWaybill(tr.dataset.wb));
+}
+
+/* ---------- editor ---------- */
+function wbPartyCard(which){
+  const key={consignor:'wbConsignor',carrier:'wbCarrier',consignee:'wbConsignee'}[which];
+  const p=WB[which];
+  if(which==='consignee'&&!p)return `<div class="party" style="background:#fff;border-style:dashed">
+    <div class="sect-title">${esc(t(key))}</div>
+    <div class="combo"><input id="wbConsQ" placeholder="${esc(t('wbPickConsignee'))}" autocomplete="off">
+      <div class="menu" id="wbConsMenu"></div></div>
+    <div class="btnrow" style="margin-top:9px">
+      <button class="btn sm" id="wbConsManual">${esc(t('useManual'))}</button>
+      <button class="btn sm" id="wbConsReg">${esc(t('regFind'))}</button>
+    </div></div>`;
+  return `<div class="party">
+    <div class="sect-title">${esc(t(key))}</div>
+    <div class="pn">${esc((p&&p.name)||'—')}</div>
+    <div class="pd">${[p&&p.code?t('pdfCode')+' '+p.code:'',(p&&p.address)||'',(p&&p.phone)||'']
+      .filter(Boolean).map(esc).join('<br>')}</div>
+    <div class="btnrow" style="margin-top:9px">
+      <button class="btn sm" data-wbedit="${which}">${esc(t('edChange'))}</button>
+      ${which==='carrier'?`<label class="inline-check" style="margin-left:4px">
+        <input type="checkbox" id="wbSelf" ${WB.carrierSelf?'checked':''}> <span>${esc(t('wbCarrierSelf'))}</span></label>`:''}
+    </div></div>`;
+}
+
+function renderWaybill(){
+  if(!WB){go('waybills');return;}
+  const inv=WB.invoiceId?S.invoices.find(i=>i.id===WB.invoiceId):null;
+  const st=wbStatus(WB);
+  $('#p-waybill').innerHTML=`
+  <div class="btnrow" style="margin-bottom:12px">
+    <button class="btn sm" id="wbBack">${esc(t('wbBack'))}</button>
+    <div class="grow"></div>
+    ${inv?`<button class="btn sm" id="wbGoInv">${esc(t('wbInvoice'))}: <b class="mono">${esc(inv.no)}</b></button>`
+        :`<span class="muted">${esc(t('wbInvoice'))}: ${esc(t('wbNoInvoice'))}</span>`}
+    ${WB.isNew?'':`<span class="pill ${WB_STATUS_PILL[st]}">${esc(t(WB_STATUS_LABEL[st]))}</span>`}
+  </div>
+
+  <div class="card"><div class="body">
+    <div class="grid4">
+      <label class="f"><span class="l">${esc(t('wbNo'))}</span>
+        <input id="wbNo" value="${esc(WB.no||'')}" class="mono"></label>
+      <label class="f"><span class="l">${esc(t('wbDate'))}</span>
+        <input type="date" id="wbDate" value="${esc(WB.date||'')}"></label>
+      <label class="f" style="grid-column:span 2"><span class="l">${esc(t('wbPlace'))}</span>
+        <input id="wbPlace" value="${esc(WB.place||'')}"></label>
+    </div>
+  </div></div>
+
+  <div class="grid3" style="margin-bottom:16px" id="wbParties">
+    <div id="wbBoxConsignor">${wbPartyCard('consignor')}</div>
+    <div id="wbBoxCarrier">${wbPartyCard('carrier')}</div>
+    <div id="wbBoxConsignee">${wbPartyCard('consignee')}</div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('wbRoute'))}</h2></div>
+    <div class="body">
+      <div class="grid4">
+        <label class="f" style="grid-column:span 2"><span class="l">${esc(t('wbLoadAddr'))}</span>
+          <input id="wbLoadAddr" value="${esc(WB.loadAddr||'')}"></label>
+        <label class="f"><span class="l">${esc(t('wbLoadDate'))}</span>
+          <input type="date" id="wbLoadDate" value="${esc(WB.loadDate||'')}"></label>
+        <div></div>
+        <label class="f" style="grid-column:span 2"><span class="l">${esc(t('wbUnloadAddr'))}</span>
+          <input id="wbUnloadAddr" value="${esc(WB.unloadAddr||'')}"></label>
+        <label class="f"><span class="l">${esc(t('wbUnloadDate'))}</span>
+          <input type="date" id="wbUnloadDate" value="${esc(WB.unloadDate||'')}"></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('wbTransport'))}</h2><div class="grow"></div>
+      ${S.fleet.length?`<select id="wbFleetPick" style="width:auto"><option value="">${esc(t('wbPick'))}…</option>
+        ${S.fleet.map(f=>`<option value="${f.id}">${esc([f.plate,f.make].filter(Boolean).join(' · '))}</option>`).join('')}</select>`:''}
+      ${S.drivers.length?`<select id="wbDriverPick" style="width:auto"><option value="">${esc(t('wbDriver'))}…</option>
+        ${S.drivers.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select>`:''}
+    </div>
+    <div class="body"><div class="grid4">
+      <label class="f"><span class="l">${esc(t('wbVehicle'))}</span><input id="wbVehicle" value="${esc(WB.vehicle||'')}"></label>
+      <label class="f"><span class="l">${esc(t('wbTrailer'))}</span><input id="wbTrailer" value="${esc(WB.trailer||'')}"></label>
+      <label class="f"><span class="l">${esc(t('wbDriver'))}</span><input id="wbDriver" value="${esc(WB.driver||'')}"></label>
+      <label class="f"><span class="l">${esc(t('wbDriverDoc'))}</span><input id="wbDriverDoc" value="${esc(WB.driverDoc||'')}"></label>
+    </div></div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('wbCargo'))}</h2><div class="grow"></div>
+      ${inv?`<button class="btn sm" id="wbFromInv">${esc(t('wbCopyLines'))}</button>`:''}
+      <button class="btn sm primary" id="wbAddLine">${esc(t('wbAddLine'))}</button></div>
+    <div class="body tight"><div class="tblwrap" style="border:0">
+      <table id="wbTbl"><thead><tr>
+        <th style="min-width:200px">${esc(t('wbLnName'))}</th>
+        <th style="width:96px">${esc(t('wbLnCode'))}</th>
+        <th class="num" style="width:80px">${esc(t('wbLnQty'))}</th>
+        <th style="width:82px">${esc(t('wbLnUnit'))}</th>
+        <th class="num" style="width:84px">${esc(t('wbLnPacks'))}</th>
+        <th class="num" style="width:104px">${esc(t('wbLnWeight'))}</th>
+        <th class="num" style="width:100px">${esc(t('wbLnValue'))}</th>
+        <th style="width:34px"></th></tr></thead>
+        <tbody id="wbBody"></tbody>
+        <tfoot id="wbFoot"></tfoot></table>
+    </div></div>
+  </div>
+
+  <div class="card"><div class="body">
+    <label class="f"><span class="l">${esc(t('wbNotes'))}</span>
+      <textarea id="wbNotes" placeholder="${esc(t('wbNotesPh'))}">${esc(WB.notes||'')}</textarea></label>
+    ${st==='delivered'?`<div class="grid2" style="margin-top:12px">
+      <label class="f"><span class="l">${esc(t('wbReceivedBy'))}</span><input id="wbRecv" value="${esc(WB.receivedBy||'')}"></label>
+      <label class="f"><span class="l">${esc(t('wbDelivered'))}</span><input type="date" id="wbDelAt" value="${esc(WB.deliveredAt||'')}"></label>
+    </div>`:''}
+  </div></div>
+
+  <div class="actionbar">
+    <button class="btn primary" id="wbSave">${esc(t('edSave'))}</button>
+    <button class="btn" id="wbPdf">${esc(t('edPdf'))}</button>
+    <div class="grow"></div>
+    ${WB.isNew?'':`
+      ${st!=='delivered'?`<button class="btn good" id="wbDeliver">${esc(t('wbMarkDelivered'))}</button>`:''}
+      ${inv?'':`<button class="btn" id="wbMkInv">${esc(t('wbToInvoice'))}</button>`}
+      <button class="btn" id="wbCopy">${esc(t('edCopy'))}</button>
+      <button class="btn danger" id="wbDel">${esc(t('edDelete'))}</button>`}
+  </div>`;
+
+  renderWbLines();
+  bindWaybill();
+}
+
+function renderWbLines(){
+  $('#wbBody').innerHTML=(WB.lines||[]).map((l,i)=>`
+    <tr data-i="${i}">
+      <td data-c="name" data-lab="${esc(t('wbLnName'))}"><input data-k="name" value="${esc(l.name||'')}" placeholder="${esc(t('wbLnName'))}"></td>
+      <td data-c="code" data-lab="${esc(t('wbLnCode'))}"><input data-k="code" value="${esc(l.code||'')}"></td>
+      <td data-c="qty" data-lab="${esc(t('wbLnQty'))}"><input data-k="qty" type="number" step="any" value="${l.qty}"></td>
+      <td data-c="unit" data-lab="${esc(t('wbLnUnit'))}"><input data-k="unit" value="${esc(l.unit||'')}"></td>
+      <td data-c="packs" data-lab="${esc(t('wbLnPacks'))}"><input data-k="packs" type="number" step="any" value="${l.packs}"></td>
+      <td data-c="weight" data-lab="${esc(t('wbLnWeight'))}"><input data-k="weight" type="number" step="any" value="${l.weight}"></td>
+      <td data-c="value" data-lab="${esc(t('wbLnValue'))}"><input data-k="value" type="number" step="any" value="${l.value}"></td>
+      <td data-c="del"><button class="icon-btn" data-del>✕</button></td>
+    </tr>`).join('');
+  const tt=wbTotals(WB);
+  $('#wbFoot').innerHTML=`<tr><td colspan="4">${esc(t('wbTotals'))}</td>
+    <td class="num">${tt.packs||'—'}</td><td class="num">${tt.weight?money(tt.weight):'—'}</td>
+    <td class="num">${tt.value?money(tt.value):'—'}</td><td></td></tr>`;
+  $$('#wbBody tr').forEach(tr=>{
+    const i=+tr.dataset.i;
+    tr.querySelectorAll('input').forEach(inp=>{
+      inp.oninput=()=>{
+        const k=inp.dataset.k;
+        WB.lines[i][k]=(k==='name'||k==='code'||k==='unit')?inp.value:num(inp.value);
+        const tt2=wbTotals(WB);
+        $('#wbFoot').innerHTML=`<tr><td colspan="4">${esc(t('wbTotals'))}</td>
+          <td class="num">${tt2.packs||'—'}</td><td class="num">${tt2.weight?money(tt2.weight):'—'}</td>
+          <td class="num">${tt2.value?money(tt2.value):'—'}</td><td></td></tr>`;
+      };
+      inp.onkeydown=e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(i===WB.lines.length-1){WB.lines.push(blankWbLine());renderWbLines();
+            const r=$$('#wbBody input[data-k="name"]');r[r.length-1].focus();}
+          else $$('#wbBody tr')[i+1].querySelector('[data-k="name"]').focus();
+        }
+      };
+    });
+    tr.querySelector('[data-del]').onclick=()=>{
+      WB.lines.splice(i,1);
+      if(!WB.lines.length)WB.lines.push(blankWbLine());
+      renderWbLines();
+    };
+  });
+}
+
+function bindWaybill(){
+  const bind=(id,key,ev)=>{const el=$('#'+id);if(el)el[ev||'oninput']=()=>{WB[key]=el.value;};};
+  $('#wbBack').onclick=()=>{WB=null;go('waybills');};
+  bind('wbNo','no');bind('wbPlace','place');
+  bind('wbLoadAddr','loadAddr');bind('wbUnloadAddr','unloadAddr');
+  bind('wbVehicle','vehicle');bind('wbTrailer','trailer');
+  bind('wbDriver','driver');bind('wbDriverDoc','driverDoc');
+  bind('wbNotes','notes');
+  ['wbDate','wbLoadDate','wbUnloadDate'].forEach(id=>{
+    const el=$('#'+id);if(!el)return;
+    const key={wbDate:'date',wbLoadDate:'loadDate',wbUnloadDate:'unloadDate'}[id];
+    el.onchange=()=>{WB[key]=el.value;};
+  });
+  const rv=$('#wbRecv');if(rv)rv.oninput=()=>{WB.receivedBy=rv.value;};
+  const da=$('#wbDelAt');if(da)da.onchange=()=>{WB.deliveredAt=da.value;};
+
+  const gi=$('#wbGoInv');if(gi)gi.onclick=()=>{WB=null;openInvoice(S.waybills.find(x=>x.id)&&null);};
+  if(gi)gi.onclick=()=>{const id=WB.invoiceId;WB=null;openInvoice(id);};
+
+  $$('#p-waybill [data-wbedit]').forEach(b=>b.onclick=()=>{
+    const which=b.dataset.wbedit;
+    customerModal(Object.assign({id:uid()},WB[which]||{}),c=>{
+      WB[which]=partyOf(c);
+      if(which==='carrier')WB.carrierSelf=false;
+      $('#wbBox'+which.charAt(0).toUpperCase()+which.slice(1)).innerHTML=wbPartyCard(which);
+      bindWaybill();
+    });
+  });
+  const self=$('#wbSelf');
+  if(self)self.onchange=()=>{
+    WB.carrierSelf=self.checked;
+    if(self.checked)WB.carrier=partyOf(S.seller);
+    $('#wbBoxCarrier').innerHTML=wbPartyCard('carrier');
+    bindWaybill();
+  };
+  const cq=$('#wbConsQ');
+  if(cq){
+    attachPartyCombo(cq,$('#wbConsMenu'),c=>{
+      WB.consignee=partyOf(c);
+      if(!WB.unloadAddr)WB.unloadAddr=c.address||'';
+      const ua=$('#wbUnloadAddr');if(ua)ua.value=WB.unloadAddr;
+      $('#wbBoxConsignee').innerHTML=wbPartyCard('consignee');
+      bindWaybill();
+    });
+    $('#wbConsManual').onclick=()=>customerModal(null,c=>{
+      S.customers.push(c);saveNow();
+      WB.consignee=partyOf(c);
+      $('#wbBoxConsignee').innerHTML=wbPartyCard('consignee');bindWaybill();
+    });
+    $('#wbConsReg').onclick=()=>registryModal(r=>{
+      const c=customerFromRegistry(r);S.customers.push(c);saveNow();
+      WB.consignee=partyOf(c);
+      if(!WB.unloadAddr)WB.unloadAddr=c.address||'';
+      const ua=$('#wbUnloadAddr');if(ua)ua.value=WB.unloadAddr;
+      $('#wbBoxConsignee').innerHTML=wbPartyCard('consignee');bindWaybill();
+    });
+  }
+  const fp=$('#wbFleetPick');
+  if(fp)fp.onchange=()=>{
+    const f=S.fleet.find(x=>x.id===fp.value);if(!f)return;
+    WB.vehicle=[f.plate,f.make].filter(Boolean).join(' ');WB.trailer=f.trailer||'';
+    $('#wbVehicle').value=WB.vehicle;$('#wbTrailer').value=WB.trailer;fp.value='';
+  };
+  const dp=$('#wbDriverPick');
+  if(dp)dp.onchange=()=>{
+    const d=S.drivers.find(x=>x.id===dp.value);if(!d)return;
+    WB.driver=d.name;WB.driverDoc=d.doc||'';
+    $('#wbDriver').value=WB.driver;$('#wbDriverDoc').value=WB.driverDoc;dp.value='';
+  };
+  $('#wbAddLine').onclick=()=>{WB.lines.push(blankWbLine());renderWbLines();
+    const r=$$('#wbBody input[data-k="name"]');r[r.length-1]&&r[r.length-1].focus();};
+  const fi=$('#wbFromInv');
+  if(fi)fi.onclick=()=>{
+    const inv=S.invoices.find(i=>i.id===WB.invoiceId);
+    if(inv){fillWbFromInvoice(WB,inv);renderWaybill();toast(t('copied'));}
+  };
+  $('#wbSave').onclick=()=>{if(commitWaybill()){toast(t('saved'));render();}};
+  $('#wbPdf').onclick=()=>{if(commitWaybill())printWaybill(WB);};
+  const dl=$('#wbDeliver');
+  if(dl)dl.onclick=()=>{
+    WB.status='delivered';WB.deliveredAt=WB.deliveredAt||today();
+    commitWaybill();renderWaybill();toast(t('wbStatusDelivered'));
+  };
+  const mk=$('#wbMkInv');
+  if(mk)mk.onclick=()=>invoiceFromWaybill(WB);
+  const cp=$('#wbCopy');
+  if(cp)cp.onclick=()=>{
+    const s=S.settings,copy=JSON.parse(JSON.stringify(WB));
+    copy.id=uid();copy.seq=s.wbNext;copy.no=makeWbNumber(s.wbNext);
+    copy.date=today();copy.status='draft';copy.deliveredAt='';copy.receivedBy='';
+    copy.lines=(copy.lines||[]).map(l=>({...l,id:uid()}));
+    copy.isNew=true;WB=copy;renderWaybill();toast(t('copied'));
+  };
+  const dd=$('#wbDel');
+  if(dd)dd.onclick=()=>confirmBox(WB.no||'',()=>{
+    S.waybills=S.waybills.filter(x=>x.id!==WB.id);
+    WB=null;saveNow();toast(t('deleted'));go('waybills');
+  });
+}
+
+/* Waybill -> invoice, for the "deliver first, bill later" order of work. */
+function invoiceFromWaybill(w){
+  newInvoice();
+  const saved=S.customers.find(c=>c.code&&w.consignee&&c.code===w.consignee.code)
+           || S.customers.find(c=>w.consignee&&c.name===w.consignee.name);
+  setBuyer(saved||Object.assign({id:null},w.consignee||{}));
+  const rate=S.settings.vatPayer?num(S.settings.vatRate):0;
+  const lines=(w.lines||[]).filter(l=>String(l.name||'').trim());
+  if(lines.length)EDIT.lines=lines.map(l=>({
+    id:uid(),name:l.name,qty:num(l.qty)||1,unit:l.unit||S.settings.unit,
+    price:num(l.qty)?r2(num(l.value)/num(l.qty)):num(l.value),disc:0,vat:rate}));
+  EDIT.notes=[EDIT.notes,(LANG==='lt'?'Pagal važtaraštį ':'Per waybill ')+w.no].filter(Boolean).join('\n');
+  EDIT.waybillId=w.id;
+  renderEditor();
+  toast(t('wbToInvoice'));
+}
+
+/* The consignee picker reuses the invoice buyer combo, minus the buyer-only
+   side effects, so registry search works here too. */
+function attachPartyCombo(input,menu,onPick){
+  let hi=-1,opts=[],timer=null;
+  const closeM=()=>{menu.classList.remove('on');hi=-1;};
+  const draw=()=>{
+    const q=input.value.trim(),nq=normQ(q);
+    opts=[];let html='';
+    if(nq.length>=1){
+      const saved=S.customers.filter(c=>normQ(c.name+' '+(c.code||'')+' '+(c.address||'')).includes(nq)).slice(0,6);
+      if(saved.length){
+        html+=`<div class="head-opt">${esc(t('savedCustomers'))}</div>`;
+        saved.forEach(c=>{opts.push({kind:'cust',c});
+          html+=`<div class="opt" data-i="${opts.length-1}"><div class="t">${esc(c.name)}</div>
+            <div class="s">${esc([c.code,(c.address||'').split(',')[0]].filter(Boolean).join(' · '))}</div></div>`;});
+      }
+    }
+    if(nq.length>=3){
+      if(REG.state==='ready'){
+        const hits=REG.search(q,12);
+        if(hits.length){
+          html+=`<div class="head-opt">${esc(t('registryResults'))}</div>`;
+          hits.forEach(r=>{opts.push({kind:'reg',r});
+            html+=`<div class="opt" data-i="${opts.length-1}"><div class="t">${esc(r.name)}</div>
+              <div class="s">${esc([r.code,r.address].filter(Boolean).join(' · '))}</div></div>`;});
+        }else if(!opts.length)html+=`<div class="opt muted">${esc(t('regNoRes'))}</div>`;
+      }else if(REG.state==='loading')html+=`<div class="opt muted">${esc(t('regLoading'))}</div>`;
+      else{opts.push({kind:'load'});
+        html+=`<div class="opt" data-i="${opts.length-1}"><div class="t">⤓ ${esc(t('regLoad'))}</div>
+          <div class="s">${esc(t('regTitle'))} · 6.4 MB</div></div>`;}
+    }
+    if(!html){closeM();return;}
+    menu.innerHTML=html;menu.classList.add('on');
+    menu.querySelectorAll('[data-i]').forEach(el=>el.onclick=()=>pick(+el.dataset.i));
+  };
+  const pick=i=>{
+    const o=opts[i];if(!o)return;
+    if(o.kind==='load'){closeM();loadRegistryWithProgress().then(ok=>{if(ok){draw();input.focus();}});return;}
+    closeM();
+    if(o.kind==='cust'){onPick(o.c);return;}
+    const c=customerFromRegistry(o.r);
+    S.customers.push(c);saveNow();onPick(c);
+  };
+  input.oninput=()=>{clearTimeout(timer);timer=setTimeout(draw,140);};
+  input.onfocus=()=>{if(REG.state==='idle')REG.loadIfCached().then(ok=>{if(ok&&input.value.trim().length>=3)draw();});draw();};
+  input.onkeydown=e=>{
+    const cells=Array.from(menu.querySelectorAll('[data-i]'));
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();if(!cells.length)return;
+      hi=Math.max(0,Math.min(cells.length-1,hi+(e.key==='ArrowDown'?1:-1)));
+      cells.forEach((c,n)=>c.classList.toggle('hi',n===hi));
+      cells[hi].scrollIntoView({block:'nearest'});
+    }else if(e.key==='Enter'){
+      e.preventDefault();
+      if(hi>=0&&cells[hi])pick(+cells[hi].dataset.i);
+      else if(cells.length===1)pick(+cells[0].dataset.i);
+    }else if(e.key==='Escape')closeM();
+  };
+  const onDocClick=ev=>{
+    if(!menu.isConnected){document.removeEventListener('click',onDocClick,true);return;}
+    if(!menu.parentElement.contains(ev.target))closeM();
+  };
+  document.addEventListener('click',onDocClick,true);
+}
+
 /* ===================== customers ===================== */
 let custQ='';
 function custStats(id){
@@ -2115,6 +2746,42 @@ function renderSettings(){
     </div>
   </div>
 
+  <div class="card">
+    <div class="head"><h2>⛟ ${esc(t('setWaybills'))}</h2></div>
+    <div class="body">
+      <div class="grid4">
+        <label class="f"><span class="l">${esc(t('setWbSeries'))}</span><input data-c="wbSeries" value="${esc(c.wbSeries||'')}"></label>
+        <label class="f"><span class="l">${esc(t('setWbNext'))}</span><input data-c="wbNext" type="number" value="${c.wbNext}"></label>
+        <label class="f" style="grid-column:span 2"><span class="l">${esc(t('setWbFormat'))}</span>
+          <input data-c="wbFormat" value="${esc(c.wbFormat||'')}" class="mono">
+          <span class="h">${esc(t('setFormatHint'))} → <b class="mono" id="wbNumPreview">${esc(makeWbNumber())}</b></span></label>
+      </div>
+      <div class="grid2" style="margin-top:12px">
+        <label class="f"><span class="l">${esc(t('setWbPlace'))}</span><input data-c="wbPlace" value="${esc(c.wbPlace||'')}"></label>
+        <label class="f"><span class="l">${esc(t('setWbNote'))}</span><input data-c="wbNote" value="${esc(c.wbNote||'')}"></label>
+      </div>
+
+      <div class="sect-title" style="margin-top:18px">${esc(t('setFleet'))}
+        <button class="btn sm" id="fleetAdd" style="float:right">${esc(t('setFleetAdd'))}</button></div>
+      ${S.fleet.length?S.fleet.map((f,i)=>`<div class="grid3" style="margin-bottom:9px;align-items:end">
+        <label class="f"><span class="l">${esc(t('setPlate'))}</span><input data-fl="${i}.plate" value="${esc(f.plate||'')}" class="mono"></label>
+        <label class="f"><span class="l">${esc(t('setMake'))}</span><input data-fl="${i}.make" value="${esc(f.make||'')}"></label>
+        <div style="display:flex;gap:8px;align-items:end">
+          <label class="f grow"><span class="l">${esc(t('setTrailer'))}</span><input data-fl="${i}.trailer" value="${esc(f.trailer||'')}" class="mono"></label>
+          <button class="icon-btn" data-fld="${i}">✕</button></div>
+      </div>`).join(''):`<div class="muted" style="padding:4px 0 8px">—</div>`}
+
+      <div class="sect-title" style="margin-top:14px">${esc(t('setDrivers'))}
+        <button class="btn sm" id="drvAdd" style="float:right">${esc(t('setDriversAdd'))}</button></div>
+      ${S.drivers.length?S.drivers.map((d,i)=>`<div class="grid2" style="margin-bottom:9px;align-items:end">
+        <label class="f"><span class="l">${esc(t('setDriverName'))}</span><input data-dr="${i}.name" value="${esc(d.name||'')}"></label>
+        <div style="display:flex;gap:8px;align-items:end">
+          <label class="f grow"><span class="l">${esc(t('setDriverDoc'))}</span><input data-dr="${i}.doc" value="${esc(d.doc||'')}" class="mono"></label>
+          <button class="icon-btn" data-drd="${i}">✕</button></div>
+      </div>`).join(''):`<div class="muted" style="padding:4px 0 8px">—</div>`}
+    </div>
+  </div>
+
   <div class="card" id="brandCard">
     <div class="head"><h2>${esc(t('setBrand'))}</h2><div class="grow"></div>
       <span class="muted">${esc(t('setBrandSub'))}</span></div>
@@ -2155,11 +2822,13 @@ function renderSettings(){
     </div>
   </div>`;
 
-  const touch=()=>{save();$('#numPreview')&&($('#numPreview').textContent=makeNumber());};
+  const touch=()=>{save();
+    $('#numPreview')&&($('#numPreview').textContent=makeNumber());
+    $('#wbNumPreview')&&($('#wbNumPreview').textContent=makeWbNumber());};
   $$('#p-settings [data-s]').forEach(inp=>inp.oninput=()=>{S.seller[inp.dataset.s]=inp.value;touch();});
   $$('#p-settings [data-c]').forEach(inp=>inp.oninput=inp.onchange=()=>{
     const k=inp.dataset.c;
-    S.settings[k]=inp.type==='checkbox'?inp.checked:(['next','vatRate','term'].includes(k)?num(inp.value):inp.value);
+    S.settings[k]=inp.type==='checkbox'?inp.checked:(['next','vatRate','term','wbNext'].includes(k)?num(inp.value):inp.value);
     touch();
   });
   $$('#p-settings [data-b]').forEach(inp=>inp.oninput=()=>{
@@ -2172,6 +2841,16 @@ function renderSettings(){
     saveNow();renderSettings();
   });
   $('#bankAdd').onclick=()=>{S.seller.banks.push({bank:'',iban:'',swift:''});saveNow();renderSettings();};
+  $$('#p-settings [data-fl]').forEach(inp=>inp.oninput=()=>{
+    const [i,k]=inp.dataset.fl.split('.');S.fleet[+i][k]=inp.value;save();});
+  $$('#p-settings [data-fld]').forEach(b=>b.onclick=()=>{
+    S.fleet.splice(+b.dataset.fld,1);saveNow();renderSettings();});
+  $('#fleetAdd').onclick=()=>{S.fleet.push({id:uid(),plate:'',make:'',trailer:''});saveNow();renderSettings();};
+  $$('#p-settings [data-dr]').forEach(inp=>inp.oninput=()=>{
+    const [i,k]=inp.dataset.dr.split('.');S.drivers[+i][k]=inp.value;save();});
+  $$('#p-settings [data-drd]').forEach(b=>b.onclick=()=>{
+    S.drivers.splice(+b.dataset.drd,1);saveNow();renderSettings();});
+  $('#drvAdd').onclick=()=>{S.drivers.push({id:uid(),name:'',doc:''});saveNow();renderSettings();};
   $('#logoIn').onchange=e=>{
     const f=e.target.files[0];if(!f)return;
     const rd=new FileReader();
@@ -2677,6 +3356,20 @@ async function exportEverything(){
     files.push({name:root+'xml/'+fn+'.xml',text:ublXml(i)});
   });
 
+  if(S.waybills.length){
+    files.push({name:root+'vaztarasciai.csv',text:csvOf(
+      ['Nr','Data','Siuntejas','Vezejas','Gavejas','Imones kodas','Pakrovimas','Iskrovimas',
+       'Pristatymo data','Transportas','Priekaba','Vairuotojas','Vietu','Mase kg','Verte','Busena','Saskaita'],
+      S.waybills.map(w=>{const tt=wbTotals(w),inv=w.invoiceId?S.invoices.find(i=>i.id===w.invoiceId):null;
+        return [w.no,w.date,(w.consignor||{}).name||'',(w.carrier||{}).name||'',
+                (w.consignee||{}).name||'',(w.consignee||{}).code||'',
+                w.loadAddr||'',w.unloadAddr||'',w.unloadDate||'',w.vehicle||'',w.trailer||'',
+                w.driver||'',tt.packs,tt.weight.toFixed(2),tt.value.toFixed(2),
+                t(WB_STATUS_LABEL[wbStatus(w)]),inv?inv.no:''];}))});
+    S.waybills.forEach(w=>files.push({
+      name:root+'vaztarasciai/'+slug(w.no||w.id)+'.html',text:waybillHtml(w,{standalone:true})}));
+  }
+
   files.push({name:root+'SKAITYK.txt',text:
 `Sąskaitos faktūros — pilnas eksportas ${stamp}
 
@@ -2687,8 +3380,10 @@ pirkejai.csv      pirkėjų sąrašas
 prekes.csv        prekių ir paslaugų katalogas
 saskaitos/*.html  kiekviena sąskaita atskirai — atidaryti naršyklėje ir spausdinti į PDF
 xml/*.xml         e-sąskaitos (UBL 2.1 / EN 16931)
+vaztarasciai.csv  važtaraščių registras
+vaztarasciai/*.html  kiekvienas važtaraštis atskirai
 
-Sąskaitų: ${S.invoices.length}   Pirkėjų: ${S.customers.length}   Prekių: ${S.items.length}
+Sąskaitų: ${S.invoices.length}   Važtaraščių: ${S.waybills.length}   Pirkėjų: ${S.customers.length}   Prekių: ${S.items.length}
 `});
 
   const blob=await makeZip(files);
@@ -2911,6 +3606,125 @@ ${body}
 ${opt.standalone?'':'<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},380)}<\/script>'}
 </body></html>`;
 }
+/* The printable važtaraštis. Shares brandCss with the invoice, so the logo,
+   accent, typeface and template chosen in Settings apply here too. Three
+   signature blocks — consignor, carrier, consignee — because the document is
+   the proof of handover at each step. */
+function waybillHtml(w,opt){
+  opt=opt||{};
+  const br=Object.assign(blankBrand(),S.brand||{}),s=S.seller,cfg=S.settings;
+  const tt=wbTotals(w);
+  const inv=w.invoiceId?S.invoices.find(i=>i.id===w.invoiceId):null;
+  const title=t('wbTitle');
+
+  const party=(label,p)=>`
+    <div class="pty"><div class="pl">${esc(label)}</div>
+      <div class="pn">${esc((p&&p.name)||'—')}</div>
+      <div class="pv">${[p&&p.code?`${t('pdfCode')} ${p.code}`:'',
+                         p&&p.vat?`${t('pdfVat')} ${p.vat}`:'',
+                         (p&&p.address)||'',(p&&p.phone)||''].filter(Boolean).map(esc).join('<br>')}</div></div>`;
+
+  const rows=(w.lines||[]).filter(l=>String(l.name||'').trim()).map((l,i)=>`
+    <tr><td class="c">${i+1}</td><td>${esc(l.name)}</td><td class="c">${esc(l.code||'')}</td>
+      <td class="c">${num(l.qty)}</td><td class="c">${esc(l.unit||'')}</td>
+      <td class="r">${num(l.packs)||''}</td><td class="r">${num(l.weight)?money(l.weight):''}</td>
+      <td class="r">${num(l.value)?money(l.value):''}</td></tr>`).join('');
+
+  const field=(label,val)=>`<div class="fld"><div class="fl">${esc(label)}</div><div class="fv">${esc(val||'—')}</div></div>`;
+
+  const body=`
+<div class="wrap">
+  ${w.status==='delivered'&&br.paidStamp?`<div class="paidmark">${esc(t('wbDelivered')).toUpperCase()}</div>`:''}
+  <div class="top">
+    <div>${br.showLogo&&s.logo?`<img class="brandimg" src="${s.logo}">`
+        :`<span class="logo">${esc((s.name||'VŽ').slice(0,3).toUpperCase())}</span>`}
+      <div class="sname">${esc(s.name||'')}</div>
+      ${br.headline?`<div class="headline">${esc(br.headline)}</div>`:''}</div>
+    <div class="doc"><h1>${esc(title)}</h1>
+      <div class="meta">${esc(t('wbNo'))} <b>${esc(w.no||'')}</b><br>
+        ${esc(t('wbDate'))}: ${esc(fmtDate(w.date))}<br>
+        ${w.place?esc(t('wbPlace'))+': '+esc(w.place):''}
+        ${inv?`<br>${esc(t('wbInvoice'))}: <b>${esc(inv.no)}</b>`:''}</div></div>
+  </div>
+  <div class="rule"></div>
+
+  <div class="parties three">
+    ${party(t('wbConsignor'),w.consignor)}
+    ${party(t('wbCarrier'),w.carrier)}
+    ${party(t('wbConsignee'),w.consignee)}
+  </div>
+
+  <div class="fields">
+    ${field(t('wbLoadAddr'),w.loadAddr)}
+    ${field(t('wbLoadDate'),fmtDate(w.loadDate))}
+    ${field(t('wbUnloadAddr'),w.unloadAddr)}
+    ${field(t('wbUnloadDate'),fmtDate(w.unloadDate))}
+    ${field(t('wbVehicle'),w.vehicle)}
+    ${field(t('wbTrailer'),w.trailer)}
+    ${field(t('wbDriver'),w.driver)}
+    ${field(t('wbDriverDoc'),w.driverDoc)}
+  </div>
+
+  <table><thead><tr>
+    <th class="c" style="width:26px">${esc(t('pdfNo'))}</th>
+    <th>${esc(t('wbLnName'))}</th>
+    <th class="c">${esc(t('wbLnCode'))}</th>
+    <th class="c">${esc(t('wbLnQty'))}</th>
+    <th class="c">${esc(t('wbLnUnit'))}</th>
+    <th class="r">${esc(t('wbLnPacks'))}</th>
+    <th class="r">${esc(t('wbLnWeight'))}</th>
+    <th class="r">${esc(t('wbLnValue'))}</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="8" class="c">—</td></tr>'}</tbody>
+    <tfoot><tr><td colspan="5" class="r"><b>${esc(t('wbTotals'))}</b></td>
+      <td class="r"><b>${tt.packs||'—'}</b></td>
+      <td class="r"><b>${tt.weight?money(tt.weight):'—'}</b></td>
+      <td class="r"><b>${tt.value?money(tt.value):'—'}</b></td></tr></tfoot></table>
+
+  ${br.showNotes&&w.notes?`<div class="remarks"><div class="rl">${esc(t('wbNotes'))}</div>${esc(w.notes)}</div>`:''}
+
+  <div class="signs three">
+    <div class="sig"><div class="sl">${esc(t('wbSignConsignor'))}</div>
+      <div class="sline">${br.stamp?`<img class="stamp" src="${br.stamp}">`:''}</div>
+      <div class="sn">${esc(t('wbSignHint'))}</div></div>
+    <div class="sig"><div class="sl">${esc(t('wbSignCarrier'))}</div><div class="sline"></div>
+      <div class="sn">${esc(w.driver||t('wbSignHint'))}</div></div>
+    <div class="sig"><div class="sl">${esc(t('wbSignConsignee'))}</div><div class="sline"></div>
+      <div class="sn">${esc(w.receivedBy||t('wbSignHint'))}</div></div>
+  </div>
+
+  ${br.showFooter?`<div class="foot"><div>${esc(cfg.footer||'')}</div>
+    <div>${esc([s.web,s.email,s.phone].filter(Boolean).join(' · '))}</div></div>`:''}
+</div>`;
+
+  const extra=`
+.parties.three{grid-template-columns:repeat(3,1fr);gap:10px}
+.parties.three .pn{font-size:12.5px}
+.parties.three .pv{font-size:10px;line-height:1.6}
+.fields{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:0 0 18px}
+.fld{border:1px solid #e6e8ed;border-radius:9px;padding:8px 11px;min-width:0}
+.fl{font-size:8.5px;text-transform:uppercase;letter-spacing:.08em;color:#9aa3b2;font-weight:700}
+.fv{font-size:11.5px;margin-top:2px;word-break:break-word}
+.signs.three{grid-template-columns:repeat(3,1fr);gap:18px}
+.signs.three .sl{font-size:8.5px}
+th{font-size:8.5px}
+td{font-size:11px}
+tfoot td{border-top:2px solid #1b1e26;border-bottom:0;padding-top:9px}
+@media print{.fld{break-inside:avoid}}`;
+
+  if(opt.bodyOnly)return `<style>${brandCss(br)}${extra}</style>`+body;
+  return `<!DOCTYPE html><html lang="${LANG}"><head><meta charset="utf-8">
+<title>${esc(title)} ${esc(w.no)}</title>
+<style>${brandCss(br)}${extra}</style></head><body>
+${opt.standalone?'':`<div class="noprint"><button onclick="window.print()">${esc(t('pdfPrintSave'))}</button></div>`}
+${body}
+${opt.standalone?'':'<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},380)}<\/script>'}
+</body></html>`;
+}
+function printWaybill(w){
+  const win=window.open('','_blank');
+  if(!win){toast(t('popupBlocked'),true);return;}
+  win.document.open();win.document.write(waybillHtml(w));win.document.close();
+}
 function printInvoice(inv){
   const w=window.open('','_blank');
   if(!w){toast(t('popupBlocked'),true);return;}
@@ -2930,6 +3744,7 @@ Object.defineProperties(window,{
   I18N: {get:()=>I18N, configurable:true},
   REG:  {get:()=>REG,  configurable:true},
   Cloud:{get:()=>Cloud,configurable:true},
+  WB:   {get:()=>WB,   set:v=>{WB=v}, configurable:true},
   STATE_V:{get:()=>STATE_V,configurable:true},
   CLOUD_SQL:{get:()=>CLOUD_SQL,configurable:true}
 });
@@ -2953,7 +3768,7 @@ function boot(){
       if(VIEW==='editor'&&EDIT){if(commitInvoice()){toast(t('saved'));render();}}else{saveNow();toast(t('saved'));}}
   });
   const h=(location.hash||'').replace('#','');
-  go(TABS.some(x=>x.id===h&&h!=='editor')?h:'dash');
+  go(TABS.some(x=>x.id===h&&h!=='editor'&&h!=='waybill')?h:'dash');
   /* If the registry was downloaded before, bring it back silently. */
   REG.loadIfCached().then(ok=>{if(ok&&VIEW==='settings')paintRegPanel();});
   Cloud.load();paintCloud();Cloud.start();
