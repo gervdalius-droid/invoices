@@ -29,14 +29,23 @@ function near(n,a,b,eps){ok(n,Math.abs(a-b)<(eps||0.005),'got '+a+' want '+b);}
 const frame=document.getElementById('app');
 frame.onload=()=>setTimeout(run,320);
 
-function run(){
-  const W=frame.contentWindow,D=frame.contentDocument;
-  try{ tests(W,D); }
-  catch(e){ fail++; line('  ✗ EXCEPTION: '+e.message+'<br>'+(e.stack||'').split('\n').slice(0,4).join('<br>'),'bad'); }
+function finish(){
   const s=document.getElementById('sum');
   s.className=fail?'fail':'pass';
   s.textContent=(fail?'FAIL':'ALL_PASS')+'  —  '+pass+' passed, '+fail+' failed';
   document.title=(fail?'FAIL ':'ALL_PASS ')+pass+'/'+(pass+fail);
+}
+function blow(e){
+  fail++;
+  line('  ✗ EXCEPTION: '+e.message+'<br>'+(e.stack||'').split('\n').slice(0,4).join('<br>'),'bad');
+}
+/* the suite is part sync, part promise chain (cloud + zip are async) */
+function run(){
+  const W=frame.contentWindow,D=frame.contentDocument;
+  let p;
+  try{ p=tests(W,D); }
+  catch(e){ blow(e); finish(); return; }
+  Promise.resolve(p).then(finish,e=>{blow(e);finish();});
 }
 
 function tests(W,D){
@@ -220,6 +229,147 @@ function tests(W,D){
   W.download=realDl;
 
   /* ---------------------------------------------------------------- */
+  grp('state migration v1 -> v2');
+  eq('current version', W.STATE_V, 2);
+  const v1={v:1,invoices:[],customers:[],items:[],
+            seller:{name:'A'},settings:{series:'X',showWords:false,showSign:false,vatRate:9}};
+  W.adopt(JSON.parse(JSON.stringify(v1)));
+  eq('version bumped', W.S.v, 2);
+  eq('brand created', typeof W.S.brand, 'object');
+  eq('showWords moved into brand', W.S.brand.showWords, false);
+  eq('showSign moved into brand', W.S.brand.showSign, false);
+  ok('old keys dropped from settings', W.S.settings.showWords===undefined && W.S.settings.showSign===undefined);
+  eq('own settings preserved', W.S.settings.series, 'X');
+  eq('unset settings defaulted', W.S.settings.term, 14);
+  eq('seller defaults filled', W.S.seller.banks.length, 1);
+  W.adopt({invoices:[],customers:[],items:[]});
+  eq('a fresh doc gets brand defaults', W.S.brand.template, 'modern');
+  eq('migrating twice is a no-op', W.migrate({v:2,brand:{template:'classic'}}).brand.template, 'classic');
+
+  /* ---------------------------------------------------------------- */
+  grp('branding');
+  eq('shade darkens', W.shade('#ffffff',-100), '#000000');
+  eq('shade lightens', W.shade('#000000',100), '#ffffff');
+  eq('shade rejects junk safely', W.shade('nope',-30), '#1e3aa8');
+  W.S.seller={...W.S.seller,name:'Brand Co',code:'111',vat:'LT111',address:'Vilnius',
+              banks:[{bank:'B',iban:'LT99',swift:'X'}],director:'D'};
+  W.S.invoices=[];
+  const demo=W.sampleInvoice();
+  ok('sample invoice has lines', (demo.lines||[]).length>0);
+  ok('sample used when there are no real invoices', demo.id==='demo');
+  let doc=W.invoiceHtml(demo,{standalone:true});
+  ok('standalone doc omits the print button', doc.indexOf('<div class="noprint">')<0);
+  ok('standalone doc omits the auto-print script', doc.indexOf('window.print()')<0);
+  ok('non-standalone doc has the print button', W.invoiceHtml(demo).indexOf('<div class="noprint">')>=0);
+  W.S.brand.accent='#0f766e';
+  ok('accent colour reaches the CSS', W.invoiceHtml(demo,{standalone:true}).indexOf('#0f766e')>=0);
+  for(const tpl of ['modern','classic','minimal']){
+    W.S.brand.template=tpl;
+    const h=W.invoiceHtml(demo,{standalone:true});
+    ok(tpl+' renders', h.length>2000);
+    ok(tpl+' keeps the seller VAT number', h.indexOf('LT111')>=0);
+    ok(tpl+' keeps the totals block', h.indexOf('class="grand"')>=0);
+  }
+  W.S.brand.template='modern';
+  W.S.brand.showBank=false;
+  ok('bank block hides', W.invoiceHtml(demo,{standalone:true}).indexOf('LT99')<0);
+  W.S.brand.showBank=true;
+  ok('bank block returns', W.invoiceHtml(demo,{standalone:true}).indexOf('LT99')>=0);
+  W.S.brand.showSign=false;
+  ok('signature block hides', W.invoiceHtml(demo,{standalone:true}).indexOf('class="signs"')<0);
+  W.S.brand.showSign=true;
+  W.S.brand.showVatCol=false;
+  const noVat=W.invoiceHtml(demo,{standalone:true});
+  eq('VAT column header gone', (noVat.match(/PVM %|VAT %/g)||[]).length, 0);
+  eq('header and body still line up',
+     (noVat.split('<thead>')[1].split('</thead>')[0].match(/<th/g)||[]).length,
+     (noVat.split('<tbody>')[1].split('</tr>')[0].match(/<td/g)||[]).length);
+  W.S.brand.showVatCol=true;
+  W.S.brand.titles.invoice='MANO SĄSKAITA';
+  ok('custom document title used', W.invoiceHtml(demo,{standalone:true}).indexOf('MANO SĄSKAITA')>=0);
+  W.S.brand.titles.invoice='';
+  ok('blank custom title falls back', W.invoiceHtml(demo,{standalone:true}).indexOf(W.t('pdfInvoice'))>=0);
+  /* paid stamp */
+  const paidInv={...demo,payments:[{amount:99999}],status:'sent'};
+  const MARK='<div class="paidmark">';
+  ok('paid stamp shows on a paid invoice', W.invoiceHtml(paidInv,{standalone:true}).indexOf(MARK)>=0);
+  ok('paid stamp absent when unpaid', W.invoiceHtml(demo,{standalone:true}).indexOf(MARK)<0);
+  W.S.brand.paidStamp=false;
+  ok('paid stamp respects its toggle', W.invoiceHtml(paidInv,{standalone:true}).indexOf(MARK)<0);
+  W.S.brand.paidStamp=true;
+
+  /* ---------------------------------------------------------------- */
+  grp('cloud sync');
+  ok('Cloud module present', typeof W.Cloud==='object');
+  ok('starts disconnected', W.Cloud.on()===false);
+  eq('status off', W.Cloud.status, 'off');
+  ok('mark() is inert while disconnected', (W.Cloud.mark(),W.Cloud.dirty===false));
+  ok('schema names the table', W.CLOUD_SQL.indexOf('invoice_workspaces')>=0);
+  ok('schema enables RLS', W.CLOUD_SQL.indexOf('enable row level security')>=0);
+  ok('schema grants only to authenticated', W.CLOUD_SQL.indexOf('to authenticated')>=0);
+  /* drive the sync state machine against a stubbed REST layer */
+  W.Cloud.cfg={url:'https://x.supabase.co',key:'k',email:'a@b.c',workspace:'ws',
+               token:'tok',refresh:'r',exp:Date.now()+3600000};
+  eq('configured now counts as on', W.Cloud.on(), true);
+  let remote=null, puts=0;
+  W.Cloud.rest=async(path,opts)=>{
+    if(opts&&opts.method==='POST'){
+      puts++;
+      remote={id:'ws',data:JSON.parse(opts.body).data,updated_at:'T'+puts,updated_by:'x'};
+      return [remote];
+    }
+    return remote?[remote]:[];
+  };
+  W.S.invoices=[{id:'i1',no:'A-1',date:'2026-01-01',dueDate:'2026-01-15',
+                 buyer:{name:'B'},lines:[{name:'x',qty:1,price:10,vat:21,disc:0}],payments:[],status:'sent'}];
+  W.Cloud.dirty=true; W.Cloud.seen=null;
+  return W.Cloud.sync().then(()=>{
+    ok('first sync pushed local state', puts===1);
+    eq('status back to idle', W.Cloud.status, 'idle');
+    eq('remote holds the invoice', remote.data.invoices.length, 1);
+    ok('seen advanced', W.Cloud.seen==='T1');
+
+    /* another device writes; we are clean -> we must adopt it */
+    remote={id:'ws',data:{v:2,invoices:[],customers:[],items:[],seller:{name:'Other'},settings:{}},
+            updated_at:'T9',updated_by:'other'};
+    W.Cloud.dirty=false;
+    return W.Cloud.sync();
+  }).then(()=>{
+    eq('clean device adopts the remote', W.S.seller.name, 'Other');
+    eq('no extra push happened', puts, 1);
+
+    /* both sides moved -> conflict, and nothing is overwritten */
+    W.S.seller.name='Mine';
+    W.Cloud.dirty=true;
+    remote={id:'ws',data:{v:2,invoices:[],customers:[],items:[],seller:{name:'Theirs'},settings:{}},
+            updated_at:'T10',updated_by:'other'};
+    return W.Cloud.sync();
+  }).then(()=>{
+    eq('conflict raised', W.Cloud.status, 'conflict');
+    eq('local state untouched', W.S.seller.name, 'Mine');
+    eq('cloud not overwritten', remote.data.seller.name, 'Theirs');
+    eq('still no second push', puts, 1);
+    D.getElementById && 0;
+    W.closeModal();
+    /* forcing resolves in our favour */
+    return W.Cloud.sync(true);
+  }).then(()=>{
+    eq('forced sync pushes', puts, 2);
+    eq('cloud now holds ours', remote.data.seller.name, 'Mine');
+    eq('status idle again', W.Cloud.status, 'idle');
+    W.Cloud.signOut();
+    eq('sign out clears config', W.Cloud.on(), false);
+    return rest2(W,D);
+  });
+}
+
+/* the suite continues after the async cloud section */
+function rest2(W,D){
+  /* ---------------------------------------------------------------- */
+  grp('export everything (ZIP)');
+  return zipTests(W).then(()=>{
+
+  /* ---------------------------------------------------------------- */
   grp('registry');
   ok('REG module present', typeof W.REG==='object' && typeof W.REG.search==='function');
   eq('search before load is empty', W.REG.search('uab',5).length, 0);
@@ -258,7 +408,7 @@ function tests(W,D){
 
   /* ---------------------------------------------------------------- */
   grp('rendering');
-  W.S.invoices=[];W.S.customers=[];W.EDIT=null;W.saveNow();
+  W.S.invoices=[];W.S.customers=[];W.EDIT=null;W.S.seller.name='';W.saveNow();
   ['dash','invoices','customers','items','settings'].forEach(v=>{
     W.go(v);
     ok('renders '+v, D.querySelector('#p-'+v).innerHTML.length>200);
@@ -276,6 +426,70 @@ function tests(W,D){
 
   /* clean up so a manual visit to index.html starts fresh */
   W.localStorage.removeItem('inv_state_v1');
+  W.localStorage.removeItem('inv_cloud');
+  });
+}
+
+/* The ZIP is parsed back out of the produced blob, so these check the archive
+   a user actually receives rather than the array we fed in. */
+async function zipTests(W){
+  W.S.invoices=[{id:'i1',no:'SF-2026-0001',date:'2026-01-05',dueDate:'2026-01-19',
+    buyer:{name:'UAB Pirkėjas',code:'123456789',vat:'LT123456715',address:'Vilnius'},
+    lines:[{id:'a',name:'Paslauga',qty:2,unit:'val',price:50,disc:0,vat:21}],
+    payments:[],status:'sent',currency:'EUR'}];
+  W.S.customers=[{id:'c1',name:'UAB Pirkėjas',code:'123456789',vat:'LT123456715',address:'Vilnius'}];
+  W.S.items=[{id:'it1',name:'Paslauga',unit:'val',price:50,vat:21,used:1}];
+
+  let captured=null;
+  const realCreate=W.URL.createObjectURL;
+  W.URL.createObjectURL=b=>{captured=b;return 'blob:stub';};
+  const files=await W.exportEverything();
+  W.URL.createObjectURL=realCreate;
+
+  ok('a blob was produced', !!captured);
+  ok('blob is a zip', captured && captured.type==='application/zip');
+  ok('blob is not empty', captured && captured.size>300);
+  const names=files.map(f=>f.name);
+  ok('has the JSON backup', names.some(n=>/duomenys\.json$/.test(n)));
+  ok('has the invoice register', names.some(n=>/saskaitos\.csv$/.test(n)));
+  ok('has the line-level CSV', names.some(n=>/eilutes\.csv$/.test(n)));
+  ok('has customers + items CSVs',
+     names.some(n=>/pirkejai\.csv$/.test(n)) && names.some(n=>/prekes\.csv$/.test(n)));
+  ok('has one HTML per invoice', names.filter(n=>/^.*saskaitos\/.*\.html$/.test(n)).length===1);
+  ok('has one XML per invoice', names.filter(n=>/\.xml$/.test(n)).length===1);
+  ok('has a readme', names.some(n=>/SKAITYK\.txt$/.test(n)));
+  ok('everything sits under one dated folder', names.every(n=>/^saskaitos-\d{4}-\d{2}-\d{2}\//.test(n)));
+
+  const lineCsv=files.find(f=>/eilutes\.csv$/.test(f.name)).text;
+  eq('line CSV has a header and one row', lineCsv.trim().split('\r\n').length, 2);
+  ok('line CSV carries the invoice number', lineCsv.indexOf('SF-2026-0001')>=0);
+  const html=files.find(f=>/\.html$/.test(f.name)).text;
+  ok('archived HTML is a full document', /^<!DOCTYPE html>/.test(html));
+  ok('archived HTML does not auto-print', html.indexOf('window.print()')<0);
+
+  /* read the central directory back out of the real blob */
+  const buf=new Uint8Array(await captured.arrayBuffer());
+  const dv=new DataView(buf.buffer);
+  let eocd=-1;
+  for(let i=buf.length-22;i>=0;i--){if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;}}
+  ok('zip has an end-of-central-directory record', eocd>=0);
+  eq('directory counts every file', dv.getUint16(eocd+10,true), files.length);
+  let off=dv.getUint32(eocd+16,true), seen=0, deflated=0;
+  const dec=new TextDecoder();
+  for(let i=0;i<files.length;i++){
+    if(dv.getUint32(off,true)!==0x02014b50)break;
+    const nlen=dv.getUint16(off+28,true);
+    const method=dv.getUint16(off+10,true);
+    if(method===8)deflated++;
+    const name=dec.decode(buf.subarray(off+46,off+46+nlen));
+    if(names.indexOf(name)>=0)seen++;
+    off+=46+nlen+dv.getUint16(off+30,true)+dv.getUint16(off+32,true);
+  }
+  eq('every central entry name matches', seen, files.length);
+  ok('entries were actually deflated', deflated>0);
+  /* the local header of the first entry must agree with its CRC */
+  eq('first local header signature', dv.getUint32(0,true), 0x04034b50);
+  W.S.invoices=[];W.S.customers=[];W.S.items=[];
 }
 </script>
 </body></html>

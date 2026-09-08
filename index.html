@@ -36,6 +36,16 @@
   .hbtns button:hover{background:#353d4b}
   .hbtns button.go{background:var(--acc);border-color:var(--acc);font-weight:600}
   .hbtns button.go:hover{background:#4468f0}
+  #cloudChip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px}
+  #cloudChip.off{opacity:.55}
+  #cloudChip.idle{border-color:#1f5c33;background:#16341f;color:#8ee0a6}
+  #cloudChip.syncing{border-color:#2c4380;background:#1b2a52;color:#a8bcf5}
+  #cloudChip.error,#cloudChip.conflict{border-color:#5c2020;background:#3a1618;color:#f5a3a3}
+  #cloudChip.offline{border-color:#5c4a20;background:#3a2f16;color:#f0cf8e}
+  .cloud-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--line2);flex:none}
+  .dot.idle{background:var(--good)}.dot.syncing{background:var(--acc)}
+  .dot.error,.dot.conflict{background:var(--bad)}.dot.offline{background:var(--warn)}
   .lang{display:inline-flex;border:1px solid #2c3340;border-radius:6px;overflow:hidden}
   .lang button{border:0;border-radius:0;padding:5px 9px}
   .lang button.on{background:var(--acc);color:#fff;font-weight:650}
@@ -174,6 +184,20 @@
   .modal .mb{padding:16px;overflow-y:auto;flex:1}
   .modal .mf{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;background:#fbfcfe}
 
+  /* ---------- branding ---------- */
+  .brand-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:18px}
+  @media(max-width:900px){.brand-grid{grid-template-columns:minmax(0,1fr)}}
+  .preview-wrap{position:sticky;top:110px;align-self:start}
+  #brandPreview{width:100%;height:640px;border:1px solid var(--line);border-radius:10px;background:#fff;display:block}
+  @media(max-width:900px){#brandPreview{height:460px}.preview-wrap{position:static}}
+  .swatches{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+  .sw{width:26px;height:26px;border-radius:7px;border:2px solid transparent;cursor:pointer;padding:0;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+  .sw.on{border-color:var(--ink);transform:scale(1.06)}
+  .swatches input[type=color]{width:34px;height:26px;padding:1px;border-radius:7px;cursor:pointer}
+  .brand-toggles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px}
+  @media(max-width:560px){.brand-toggles{grid-template-columns:minmax(0,1fr)}}
+
   /* ---------- progress ---------- */
   .prog{height:7px;background:var(--chip);border-radius:20px;overflow:hidden;margin-top:8px}
   .prog i{display:block;height:100%;background:var(--acc);width:0;transition:width .18s ease}
@@ -193,6 +217,8 @@
     .brand .sub{display:none}
     .hbtns{flex-wrap:nowrap;gap:4px;flex:none}
     #btnExport,#btnImport{display:none}
+    #cloudChip{padding:6px 8px}
+    #cloudChip .cl{display:none}
     #btnNewTop{padding:6px 10px;font-size:14px;font-weight:700}
     #btnNewTop span{display:none}
     .lang button{padding:5px 7px;font-size:11px}
@@ -242,6 +268,7 @@
       <button id="btnNewTop" class="go">＋ <span data-i18n="newInvoice">Nauja sąskaita</span></button>
       <button id="btnExport" data-i18n="backup">Atsarginė kopija</button>
       <button id="btnImport" data-i18n="restore">Atkurti</button>
+      <button id="cloudChip" title="">☁</button>
       <span class="lang"><button id="lang-lt">LT</button><button id="lang-en">EN</button></span>
     </div>
   </div>
@@ -380,6 +407,49 @@ const I18N={
   pcs:"vnt", hours:"val", sqm:"m²", pcsUnit:"vnt",
   eur:"EUR",
   needSellerName:"Nustatymuose įveskite savo įmonės pavadinimą.",
+
+  /* branding */
+  setBrand:"Sąskaitos išvaizda",setBrandSub:"Keitimai matomi peržiūroje iš karto",
+  setPreview:"Peržiūra",
+  brTemplate:"Šablonas",tplModern:"Modernus",tplClassic:"Klasikinis",tplMinimal:"Minimalus",
+  brAccent:"Akcento spalva",brFont:"Šriftas",fontSans:"Be užraitų (Inter)",fontSerif:"Su užraitais",fontMono:"Monospace",
+  brLogoH:"Logotipo aukštis (px)",
+  brHeadline:"Eilutė po pavadinimu",brHeadlinePh:"Pvz. Baldai pagal individualų projektą",
+  brBlocks:"Ką rodyti dokumente",
+  brShowLogo:"Logotipą",brShowLineNo:"Eilučių numerius",brShowUnit:"Mato vnt. stulpelį",
+  brShowVatCol:"PVM % stulpelį",brShowBank:"Banko sąskaitas",brShowNotes:"Pastabas",
+  brShowFooter:"Poraštę",brPaidStamp:"Žymą „APMOKĖTA“",
+  brStamp:"Parašas / antspaudas",brStampUp:"Įkelti atvaizdą",
+  brStampHint:"Dedamas ant „Sąskaitą išrašė“ linijos.",
+  brTitles:"Dokumentų pavadinimai",
+
+  /* cloud */
+  setCloud:"Duomenys debesyje",setCloudSub:"Sinchronizuokite tarp kompiuterio ir telefono",
+  cloudHint:"Prisijunkite prie savo Supabase projekto — visi duomenys keliaus tarp įrenginių. Lentelė užrakinta prisijungusiems, vien raktas duomenų neatveria.",
+  cloudKey:"Publishable / anon raktas",cloudEmail:"El. paštas",cloudPass:"Slaptažodis",
+  cloudWorkspace:"Darbo sritis",cloudWorkspaceHint:"Vienas pavadinimas = vienas duomenų rinkinys. Naudokite tą patį visuose įrenginiuose.",
+  cloudConnect:"Prisijungti",cloudSchema:"SQL lentelei sukurti",
+  cloudSchemaHint:"Paleiskite vieną kartą: Supabase → SQL Editor → įklijuoti → Run. Tada Authentication → Users → pridėkite naudotoją.",
+  cloudNeedAll:"Užpildykite visus laukus",
+  cloudConnected:"Prisijungta prie debesies",
+  cloudOff:"Debesis išjungtas",cloudSynced:"Sinchronizuota",cloudSyncing:"Sinchronizuojama…",
+  cloudError:"Debesio klaida",cloudConflict:"Skirtingos versijos",cloudOffline:"Neprisijungęs",
+  cloudSyncNow:"Sinchronizuoti dabar",cloudPull:"Paimti iš debesies",cloudDisconnect:"Atjungti",
+  cloudPullConfirm:"Pakeisti šio įrenginio duomenis debesies duomenimis?",
+  cloudDisconnectConfirm:"Atjungti nuo debesies? Duomenys liks šioje naršyklėje.",
+  cloudPulled:"Paimta iš debesies",cloudEmpty:"Debesyje duomenų nėra",
+  cloudActiveHint:"Įrašai keliauja į debesį automatiškai. Kiti įrenginiai atsinaujina per minutę.",
+  cloudFirstTitle:"Debesyje jau yra duomenų",
+  cloudFirstHint:"Ši darbo sritis jau turi duomenų. Pasirinkite, kuri versija lieka — kita bus perrašyta.",
+  cloudConflictHint:"Duomenys pasikeitė ir čia, ir debesyje. Pasirinkite, kurią versiją palikti.",
+  cloudThisDevice:"Šis įrenginys",cloudInCloud:"Debesyje",cloudInvoices:"sąskaitų",
+  cloudUseLocal:"Palikti šio įrenginio",cloudUseCloud:"Paimti iš debesies",
+  copy:"Kopijuoti",
+
+  /* full export */
+  setExportAll:"⬇ Eksportuoti viską (ZIP)",
+  setExportAllSub:"JSON + CSV + kiekviena sąskaita HTML ir XML formatu",
+  exportWorking:"Ruošiama…",exportAllDone:"Eksportuota",exportFiles:"failų",
   copyOf:"kopija"
  },
  en:{
@@ -478,6 +548,49 @@ const I18N={
   pcs:"pcs",hours:"h",sqm:"m²",pcsUnit:"pcs",
   eur:"EUR",
   needSellerName:"Enter your company name in Settings.",
+
+  /* branding */
+  setBrand:"Invoice appearance",setBrandSub:"Changes show in the preview instantly",
+  setPreview:"Preview",
+  brTemplate:"Template",tplModern:"Modern",tplClassic:"Classic",tplMinimal:"Minimal",
+  brAccent:"Accent colour",brFont:"Typeface",fontSans:"Sans (Inter)",fontSerif:"Serif",fontMono:"Monospace",
+  brLogoH:"Logo height (px)",
+  brHeadline:"Line under the name",brHeadlinePh:"e.g. Bespoke furniture, made to order",
+  brBlocks:"What the document shows",
+  brShowLogo:"Logo",brShowLineNo:"Line numbers",brShowUnit:"Unit column",
+  brShowVatCol:"VAT % column",brShowBank:"Bank accounts",brShowNotes:"Notes",
+  brShowFooter:"Footer",brPaidStamp:"“PAID” stamp",
+  brStamp:"Signature / stamp",brStampUp:"Upload image",
+  brStampHint:"Placed on the “Issued by” line.",
+  brTitles:"Document titles",
+
+  /* cloud */
+  setCloud:"Cloud data",setCloudSub:"Sync between your computer and phone",
+  cloudHint:"Connect your own Supabase project and the data follows you between devices. The table is locked to signed-in sessions — the key alone opens nothing.",
+  cloudKey:"Publishable / anon key",cloudEmail:"E-mail",cloudPass:"Password",
+  cloudWorkspace:"Workspace",cloudWorkspaceHint:"One name = one data set. Use the same on every device.",
+  cloudConnect:"Connect",cloudSchema:"SQL to create the table",
+  cloudSchemaHint:"Run once: Supabase → SQL Editor → paste → Run. Then Authentication → Users → add a user.",
+  cloudNeedAll:"Fill in every field",
+  cloudConnected:"Connected to the cloud",
+  cloudOff:"Cloud off",cloudSynced:"Synced",cloudSyncing:"Syncing…",
+  cloudError:"Cloud error",cloudConflict:"Versions differ",cloudOffline:"Offline",
+  cloudSyncNow:"Sync now",cloudPull:"Pull from cloud",cloudDisconnect:"Disconnect",
+  cloudPullConfirm:"Replace this device's data with what is in the cloud?",
+  cloudDisconnectConfirm:"Disconnect from the cloud? Data stays in this browser.",
+  cloudPulled:"Pulled from the cloud",cloudEmpty:"Nothing in the cloud yet",
+  cloudActiveHint:"Saves go up automatically. Other devices pick them up within a minute.",
+  cloudFirstTitle:"This workspace already has data",
+  cloudFirstHint:"There is already data in this workspace. Choose which version survives — the other is overwritten.",
+  cloudConflictHint:"Data changed here and in the cloud. Choose which version to keep.",
+  cloudThisDevice:"This device",cloudInCloud:"In the cloud",cloudInvoices:"invoices",
+  cloudUseLocal:"Keep this device's",cloudUseCloud:"Take the cloud's",
+  copy:"Copy",
+
+  /* full export */
+  setExportAll:"⬇ Export everything (ZIP)",
+  setExportAllSub:"JSON + CSV + every invoice as HTML and XML",
+  exportWorking:"Preparing…",exportAllDone:"Exported",exportFiles:"files",
   copyOf:"copy"
  }
 };
@@ -491,16 +604,46 @@ const t=k=>{const d=I18N[LANG];if(d&&d[k]!==undefined)return d[k];if(I18N.en[k]!
 const KEY='inv_state_v1', LANG_KEY='fab_lang'; /* same lang key the sibling apps use */
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
+const STATE_V=2;
+/* Everything about how the printed invoice LOOKS lives here, so the document
+   can be restyled without touching printInvoice's structure. */
+function blankBrand(){
+  return {
+    template:"modern",        /* modern | classic | minimal */
+    accent:"#2f54eb",
+    font:"sans",              /* sans | serif | mono */
+    logoH:66,
+    showLogo:true, showBank:true, showWords:true, showSign:true,
+    showNotes:true, showFooter:true, showUnit:true, showVatCol:true, showLineNo:true,
+    paidStamp:true,
+    stamp:"",                 /* signature / company stamp image, data URL */
+    headline:"",              /* free line under the seller name */
+    titles:{invoice:"",simple:"",proforma:"",credit:""}
+  };
+}
 function blankState(){
   return {
-    v:1,
+    v:STATE_V,
     seller:{name:"",code:"",vat:"",address:"",email:"",phone:"",web:"",director:"",logo:"",
             banks:[{bank:"",iban:"",swift:""}]},
     settings:{series:"SF",next:1,format:"{S}-{YYYY}-{NNNN}",vatRate:21,vatPayer:true,
               currency:"EUR",term:14,unit:"vnt",note:"",footer:"",
-              showDisc:false,showWords:true,showSign:true},
+              showDisc:false},
+    brand:blankBrand(),
     customers:[],items:[],invoices:[]
   };
+}
+/* v1 kept showWords / showSign under settings; v2 moved them into brand. */
+function migrate(p){
+  if(!p||p.v>=2)return p;
+  p.brand=Object.assign(blankBrand(),p.brand||{});
+  if(p.settings){
+    if(p.settings.showWords!==undefined)p.brand.showWords=!!p.settings.showWords;
+    if(p.settings.showSign!==undefined)p.brand.showSign=!!p.settings.showSign;
+    delete p.settings.showWords;delete p.settings.showSign;
+  }
+  p.v=2;
+  return p;
 }
 let S=blankState();
 let VIEW='dash';            /* active tab */
@@ -510,21 +653,166 @@ let saveTimer=null;
 function load(){
   try{
     const raw=localStorage.getItem(KEY);
-    if(raw){
-      const p=JSON.parse(raw);
-      S=Object.assign(blankState(),p);
-      S.seller=Object.assign(blankState().seller,p.seller||{});
-      S.settings=Object.assign(blankState().settings,p.settings||{});
-      if(!Array.isArray(S.seller.banks)||!S.seller.banks.length)S.seller.banks=[{bank:"",iban:"",swift:""}];
-      S.customers=p.customers||[];S.items=p.items||[];S.invoices=p.invoices||[];
-    }
+    if(raw)adopt(JSON.parse(raw));
   }catch(e){console.warn('load failed',e);}
+}
+/* Single funnel for every source of a state document: localStorage, an
+   imported backup and a cloud pull all land here, so defaults and the v1->v2
+   migration are applied exactly once. */
+function adopt(p){
+  p=migrate(p||{});
+  const d=blankState();                 /* defaults must be read before the
+                                           top-level merge overwrites them */
+  S=Object.assign({},d,p);
+  S.seller=Object.assign({},d.seller,p.seller||{});
+  S.settings=Object.assign({},d.settings,p.settings||{});
+  S.brand=Object.assign({},blankBrand(),p.brand||{});
+  S.brand.titles=Object.assign({invoice:"",simple:"",proforma:"",credit:""},(p.brand||{}).titles||{});
+  if(!Array.isArray(S.seller.banks)||!S.seller.banks.length)S.seller.banks=[{bank:"",iban:"",swift:""}];
+  S.customers=p.customers||[];S.items=p.items||[];S.invoices=p.invoices||[];
+  S.v=STATE_V;
+  return S;
 }
 function saveNow(){
   try{localStorage.setItem(KEY,JSON.stringify(S));}
   catch(e){toast('localStorage full — export a backup and remove the logo image',true);}
+  Cloud.mark();
 }
 function save(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,250);}
+
+/* =========================================================================
+   Cloud sync — optional, Supabase over plain REST (no SDK, no CDN).
+
+   The whole state is ONE jsonb document per workspace, the same shape the
+   shopflow app syncs. Unlike the offer app this signs IN first: invoices carry
+   customer and financial data, so the table is locked to `authenticated` and
+   the publishable key on its own grants nothing.
+
+   Conflicts: push does a pull-first check of updated_at. If the row moved
+   under us we do not silently overwrite — the user picks a side.
+   ========================================================================= */
+const Cloud={
+  CFG:'inv_cloud',
+  cfg:null, status:'off',   /* off | idle | syncing | error | conflict | offline */
+  msg:'', seen:null, timer:null, poll:null, dirty:false, busy:false,
+
+  load(){try{this.cfg=JSON.parse(localStorage.getItem(this.CFG)||'null');}catch(e){this.cfg=null;}
+         if(this.cfg)this.status='idle';return this.cfg;},
+  save(c){this.cfg=c;try{localStorage.setItem(this.CFG,JSON.stringify(c));}catch(e){}},
+  on(){return !!(this.cfg&&this.cfg.url&&this.cfg.key&&this.cfg.workspace&&this.cfg.refresh);},
+  base(){return String(this.cfg.url||'').replace(/\/+$/,'');},
+
+  /* ---- auth ---- */
+  async signIn(url,key,email,password,workspace){
+    url=String(url||'').replace(/\/+$/,'');
+    const r=await fetch(url+'/auth/v1/token?grant_type=password',{
+      method:'POST',headers:{'apikey':key,'Content-Type':'application/json'},
+      body:JSON.stringify({email,password})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.error_description||j.msg||j.error||('HTTP '+r.status));
+    this.save({url,key,email,workspace:workspace||'default',
+               token:j.access_token,refresh:j.refresh_token,exp:Date.now()+(j.expires_in||3600)*1000});
+    this.status='idle';this.msg='';
+    return true;
+  },
+  async token(){
+    if(!this.cfg)throw new Error('not configured');
+    if(this.cfg.token&&Date.now()<this.cfg.exp-60000)return this.cfg.token;
+    const r=await fetch(this.base()+'/auth/v1/token?grant_type=refresh_token',{
+      method:'POST',headers:{'apikey':this.cfg.key,'Content-Type':'application/json'},
+      body:JSON.stringify({refresh_token:this.cfg.refresh})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.error_description||j.msg||('HTTP '+r.status));
+    this.cfg.token=j.access_token;this.cfg.refresh=j.refresh_token||this.cfg.refresh;
+    this.cfg.exp=Date.now()+(j.expires_in||3600)*1000;
+    this.save(this.cfg);
+    return this.cfg.token;
+  },
+  signOut(){
+    this.cfg=null;this.status='off';this.msg='';this.seen=null;this.dirty=false;
+    clearTimeout(this.timer);clearInterval(this.poll);this.poll=null;
+    try{localStorage.removeItem(this.CFG);}catch(e){}
+    paintCloud();
+  },
+
+  async rest(path,opts){
+    const tok=await this.token();
+    const o=Object.assign({},opts||{});
+    o.headers=Object.assign({'apikey':this.cfg.key,'Authorization':'Bearer '+tok,
+                             'Content-Type':'application/json'},o.headers||{});
+    const r=await fetch(this.base()+'/rest/v1/'+path,o);
+    if(!r.ok)throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,180));
+    const txt=await r.text();
+    return txt?JSON.parse(txt):null;
+  },
+  row(){return 'invoice_workspaces?id=eq.'+encodeURIComponent(this.cfg.workspace);},
+
+  async fetchRemote(){
+    const rows=await this.rest(this.row()+'&select=id,data,updated_at,updated_by');
+    return (rows&&rows[0])||null;
+  },
+  /* Adopt whatever the cloud holds, discarding local state. */
+  async pull(){
+    const row=await this.fetchRemote();
+    if(!row)return null;
+    adopt(row.data||{});
+    this.seen=row.updated_at;this.dirty=false;
+    try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+    return row;
+  },
+  /* Overwrite the cloud with local state. */
+  async put(){
+    const now=new Date().toISOString();
+    await this.rest('invoice_workspaces',{
+      method:'POST',
+      headers:{'Prefer':'resolution=merge-duplicates,return=representation'},
+      body:JSON.stringify({id:this.cfg.workspace,data:S,updated_at:now,
+                           updated_by:(this.cfg.email||'').split('@')[0]||'device'})
+    }).then(rows=>{this.seen=(rows&&rows[0]&&rows[0].updated_at)||now;});
+    this.dirty=false;
+  },
+
+  /* Debounced auto-push, called from saveNow(). */
+  mark(){
+    if(!this.on())return;
+    this.dirty=true;
+    clearTimeout(this.timer);
+    this.timer=setTimeout(()=>this.sync(),1800);
+    paintCloud();
+  },
+  async sync(force){
+    if(!this.on()||this.busy)return;
+    this.busy=true;this.status='syncing';this.msg='';paintCloud();
+    try{
+      const row=await this.fetchRemote();
+      if(row&&this.seen&&row.updated_at!==this.seen&&this.dirty&&!force){
+        /* both sides moved since our last sync — never pick silently */
+        this.status='conflict';this.remote=row;this.busy=false;paintCloud();
+        conflictModal(row);
+        return;
+      }
+      if(row&&(!this.seen||row.updated_at!==this.seen)&&!this.dirty){
+        adopt(row.data||{});this.seen=row.updated_at;
+        try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+        render();
+      }else{
+        await this.put();
+      }
+      this.status='idle';
+    }catch(e){
+      this.status=navigator.onLine===false?'offline':'error';
+      this.msg=String(e.message||e);
+    }
+    this.busy=false;paintCloud();
+  },
+  start(){
+    if(!this.on())return;
+    this.sync();
+    clearInterval(this.poll);
+    /* no realtime without the SDK, so look for other devices once a minute */
+    this.poll=setInterval(()=>{if(!this.dirty)this.sync();},60000);
+  }
+};
 
 /* ===================== tiny helpers ===================== */
 const $=s=>document.querySelector(s);
@@ -873,6 +1161,7 @@ function renderAll(){
   document.documentElement.lang=LANG;
   $$('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
   render();
+  paintCloud();          /* the chip label is translated too */
 }
 function setLang(l){
   if(!I18N[l])l='lt';
@@ -1817,8 +2106,6 @@ function renderSettings(){
       <div class="grid2" style="margin-top:14px">
         <label class="inline-check"><input type="checkbox" data-c="vatPayer" ${c.vatPayer?'checked':''}> <span>${esc(t('setVatPayer'))}</span></label>
         <label class="inline-check"><input type="checkbox" data-c="showDisc" ${c.showDisc?'checked':''}> <span>${esc(t('setShowDisc'))}</span></label>
-        <label class="inline-check"><input type="checkbox" data-c="showWords" ${c.showWords?'checked':''}> <span>${esc(t('setShowWords'))}</span></label>
-        <label class="inline-check"><input type="checkbox" data-c="showSign" ${c.showSign?'checked':''}> <span>${esc(t('setShowSign'))}</span></label>
       </div>
       <div class="note" style="margin-top:12px">${esc(t('setVatPayerHint'))}</div>
       <div class="grid2" style="margin-top:14px">
@@ -1826,6 +2113,24 @@ function renderSettings(){
         <label class="f"><span class="l">${esc(t('setFooter'))}</span><textarea data-c="footer">${esc(c.footer||'')}</textarea></label>
       </div>
     </div>
+  </div>
+
+  <div class="card" id="brandCard">
+    <div class="head"><h2>${esc(t('setBrand'))}</h2><div class="grow"></div>
+      <span class="muted">${esc(t('setBrandSub'))}</span></div>
+    <div class="body"><div class="brand-grid">
+      <div id="brandControls"></div>
+      <div class="preview-wrap">
+        <div class="sect-title">${esc(t('setPreview'))}</div>
+        <iframe id="brandPreview" title="preview"></iframe>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>☁ ${esc(t('setCloud'))}</h2><div class="grow"></div>
+      <span class="muted">${esc(t('setCloudSub'))}</span></div>
+    <div class="body" id="cloudPanel"></div>
   </div>
 
   <div class="card">
@@ -1836,11 +2141,17 @@ function renderSettings(){
   <div class="card">
     <div class="head"><h2>${esc(t('setData'))}</h2><div class="grow"></div>
       <span class="muted">${esc(t('setDataSub'))}</span></div>
-    <div class="body btnrow">
-      <button class="btn" id="setExp">${esc(t('setExport'))}</button>
-      <button class="btn" id="setImp">${esc(t('setImport'))}</button>
-      <div class="grow"></div>
-      <button class="btn danger" id="setWipe">${esc(t('setWipe'))}</button>
+    <div class="body">
+      <div class="btnrow">
+        <button class="btn primary" id="setExpAll">${esc(t('setExportAll'))}</button>
+        <span class="muted">${esc(t('setExportAllSub'))}</span>
+      </div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn" id="setExp">${esc(t('setExport'))}</button>
+        <button class="btn" id="setImp">${esc(t('setImport'))}</button>
+        <div class="grow"></div>
+        <button class="btn danger" id="setWipe">${esc(t('setWipe'))}</button>
+      </div>
     </div>
   </div>`;
 
@@ -1868,12 +2179,19 @@ function renderSettings(){
     rd.readAsDataURL(f);
   };
   const ld=$('#logoDel');if(ld)ld.onclick=()=>{S.seller.logo='';saveNow();renderSettings();};
+  $('#setExpAll').onclick=()=>{
+    const btn=$('#setExpAll');btn.disabled=true;btn.textContent=t('exportWorking');
+    exportEverything().catch(e=>toast(String(e.message||e),true))
+      .finally(()=>{btn.disabled=false;btn.textContent=t('setExportAll');});
+  };
   $('#setExp').onclick=exportBackup;
   $('#setImp').onclick=()=>$('#fileIn').click();
   $('#setWipe').onclick=()=>confirmBox(t('setWipeConfirm'),()=>{
     S=blankState();saveNow();EDIT=null;go('dash');toast(t('deleted'));
   });
   paintRegPanel();
+  paintCloudPanel();
+  paintBrand();
 }
 function paintRegPanel(){
   const box=$('#regPanel');if(!box)return;
@@ -1902,6 +2220,248 @@ function paintRegPanel(){
   }
 }
 
+/* ===================== invoice branding ===================== */
+const TEMPLATES=[['modern','tplModern'],['classic','tplClassic'],['minimal','tplMinimal']];
+const ACCENTS=['#2f54eb','#1b1e26','#0f766e','#b45309','#9333ea','#be123c','#0369a1','#15803d'];
+const BRAND_TOGGLES=[['showLogo','brShowLogo'],['showLineNo','brShowLineNo'],['showUnit','brShowUnit'],
+  ['showVatCol','brShowVatCol'],['showWords','setShowWords'],['showBank','brShowBank'],
+  ['showNotes','brShowNotes'],['showSign','setShowSign'],['showFooter','brShowFooter'],
+  ['paidStamp','brPaidStamp']];
+
+function paintBrand(){
+  const box=$('#brandControls');if(!box)return;
+  const b=S.brand;
+  box.innerHTML=`
+    <label class="f"><span class="l">${esc(t('brTemplate'))}</span>
+      <select id="brTpl">${TEMPLATES.map(([k,l])=>`<option value="${k}" ${b.template===k?'selected':''}>${esc(t(l))}</option>`).join('')}</select></label>
+    <div class="f" style="margin-top:12px"><span class="l">${esc(t('brAccent'))}</span>
+      <div class="swatches">
+        ${ACCENTS.map(c=>`<button class="sw ${b.accent===c?'on':''}" data-acc="${c}" style="background:${c}" title="${c}"></button>`).join('')}
+        <input type="color" id="brAccCustom" value="${esc(b.accent)}" title="${esc(t('brAccent'))}">
+      </div></div>
+    <div class="grid2" style="margin-top:12px">
+      <label class="f"><span class="l">${esc(t('brFont'))}</span>
+        <select id="brFont">
+          <option value="sans" ${b.font==='sans'?'selected':''}>${esc(t('fontSans'))}</option>
+          <option value="serif" ${b.font==='serif'?'selected':''}>${esc(t('fontSerif'))}</option>
+          <option value="mono" ${b.font==='mono'?'selected':''}>${esc(t('fontMono'))}</option>
+        </select></label>
+      <label class="f"><span class="l">${esc(t('brLogoH'))}</span>
+        <input type="number" id="brLogoH" min="20" max="140" value="${num(b.logoH)||66}"></label>
+    </div>
+    <label class="f" style="margin-top:12px"><span class="l">${esc(t('brHeadline'))}</span>
+      <input id="brHeadline" value="${esc(b.headline||'')}" placeholder="${esc(t('brHeadlinePh'))}"></label>
+    <div class="sect-title" style="margin-top:16px">${esc(t('brBlocks'))}</div>
+    <div class="brand-toggles">
+      ${BRAND_TOGGLES.map(([k,l])=>`<label class="inline-check"><input type="checkbox" data-br="${k}" ${b[k]?'checked':''}> <span>${esc(t(l))}</span></label>`).join('')}
+    </div>
+    <div class="sect-title" style="margin-top:16px">${esc(t('brStamp'))}</div>
+    <div class="btnrow">
+      ${b.stamp?`<img src="${b.stamp}" style="height:44px;border:1px solid var(--line);border-radius:7px;padding:4px;background:#fff">`:''}
+      <label class="btn sm">${esc(t('brStampUp'))}<input type="file" id="brStampIn" accept="image/*" style="display:none"></label>
+      ${b.stamp?`<button class="btn sm danger" id="brStampDel">${esc(t('setLogoDel'))}</button>`:''}
+      <span class="muted">${esc(t('brStampHint'))}</span>
+    </div>
+    <div class="sect-title" style="margin-top:16px">${esc(t('brTitles'))}</div>
+    <div class="grid2">
+      ${DOC_TYPES.map(([k,l])=>`<label class="f"><span class="l">${esc(t(l))}</span>
+        <input data-brt="${k}" value="${esc((b.titles||{})[k]||'')}" placeholder="${esc(t({invoice:'pdfInvoice',simple:'pdfSimple',proforma:'pdfProforma',credit:'pdfCredit'}[k]))}"></label>`).join('')}
+    </div>`;
+
+  const touch=()=>{save();drawPreview();};
+  $('#brTpl').onchange=e=>{S.brand.template=e.target.value;touch();};
+  $('#brFont').onchange=e=>{S.brand.font=e.target.value;touch();};
+  $('#brLogoH').oninput=e=>{S.brand.logoH=num(e.target.value);touch();};
+  $('#brHeadline').oninput=e=>{S.brand.headline=e.target.value;touch();};
+  $('#brAccCustom').oninput=e=>{S.brand.accent=e.target.value;paintBrand();touch();};
+  $$('#brandControls [data-acc]').forEach(bt=>bt.onclick=()=>{S.brand.accent=bt.dataset.acc;paintBrand();touch();});
+  $$('#brandControls [data-br]').forEach(inp=>inp.onchange=()=>{S.brand[inp.dataset.br]=inp.checked;touch();});
+  $$('#brandControls [data-brt]').forEach(inp=>inp.oninput=()=>{S.brand.titles[inp.dataset.brt]=inp.value;touch();});
+  $('#brStampIn').onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const rd=new FileReader();rd.onload=()=>{S.brand.stamp=rd.result;saveNow();paintBrand();drawPreview();};
+    rd.readAsDataURL(f);
+  };
+  const sd=$('#brStampDel');if(sd)sd.onclick=()=>{S.brand.stamp='';saveNow();paintBrand();drawPreview();};
+  drawPreview();
+}
+/* The preview renders a real invoice when one exists, otherwise a sample, so
+   what you tune is exactly what prints. */
+function sampleInvoice(){
+  if(S.invoices.length){
+    const real=S.invoices.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
+    return real;
+  }
+  return {id:'demo',no:makeNumber(),type:S.settings.vatPayer?'invoice':'simple',
+    date:today(),dueDate:addDays(today(),S.settings.term|0),
+    buyer:{name:'UAB „Pavyzdys“',code:'123456789',vat:'LT123456715',
+           address:'Vilnius, Gedimino pr. 1, LT-01103',email:'',phone:'',contact:''},
+    lines:[{id:'1',name:LANG==='lt'?'Baldų gamyba pagal projektą':'Bespoke furniture',qty:1,unit:'kompl.',price:2400,disc:0,vat:num(S.settings.vatRate)},
+           {id:'2',name:LANG==='lt'?'Montavimo darbai':'Installation',qty:6,unit:'val',price:35,disc:0,vat:num(S.settings.vatRate)}],
+    notes:S.settings.note||'',currency:cur(),status:'sent',payments:[],
+    issuer:S.seller.director||'',receiver:''};
+}
+let previewTimer=null;
+function drawPreview(){
+  const fr=$('#brandPreview');if(!fr)return;
+  clearTimeout(previewTimer);
+  previewTimer=setTimeout(()=>{
+    try{fr.srcdoc=invoiceHtml(sampleInvoice(),{standalone:true});}catch(e){}
+  },120);
+}
+
+/* ===================== cloud UI ===================== */
+function paintCloud(){
+  const chip=$('#cloudChip');if(!chip)return;
+  const st=Cloud.on()?(Cloud.dirty&&Cloud.status==='idle'?'syncing':Cloud.status):'off';
+  const label={off:t('cloudOff'),idle:t('cloudSynced'),syncing:t('cloudSyncing'),
+               error:t('cloudError'),conflict:t('cloudConflict'),offline:t('cloudOffline')}[st]||'';
+  chip.className=st;
+  chip.innerHTML='☁ <span class="cl">'+esc(label)+'</span>';
+  chip.title=Cloud.on()?(Cloud.cfg.workspace+' · '+(Cloud.cfg.email||'')+(Cloud.msg?'\n'+Cloud.msg:'')):t('cloudOff');
+  const panel=$('#cloudPanel');if(panel)paintCloudPanel();
+}
+function cloudChipClick(){
+  if(!Cloud.on()){go('settings');setTimeout(()=>{
+    const el=$('#cloudPanel');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});},80);return;}
+  if(Cloud.status==='conflict'&&Cloud.remote){conflictModal(Cloud.remote);return;}
+  Cloud.sync();toast(t('cloudSyncing'));
+}
+function paintCloudPanel(){
+  const box=$('#cloudPanel');if(!box)return;
+  if(!Cloud.on()){
+    const c=Cloud.cfg||{};
+    box.innerHTML=`
+      <div class="note" style="margin-bottom:12px">${esc(t('cloudHint'))}</div>
+      <div class="grid2">
+        <label class="f"><span class="l">Supabase URL</span>
+          <input id="clUrl" placeholder="https://xxxx.supabase.co" value="${esc(c.url||'')}"></label>
+        <label class="f"><span class="l">${esc(t('cloudKey'))}</span>
+          <input id="clKey" placeholder="sb_publishable_… / anon key" value="${esc(c.key||'')}"></label>
+        <label class="f"><span class="l">${esc(t('cloudEmail'))}</span>
+          <input id="clEmail" type="email" autocomplete="username" value="${esc(c.email||'')}"></label>
+        <label class="f"><span class="l">${esc(t('cloudPass'))}</span>
+          <input id="clPass" type="password" autocomplete="current-password"></label>
+        <label class="f"><span class="l">${esc(t('cloudWorkspace'))}</span>
+          <input id="clWs" value="${esc(c.workspace||'default')}">
+          <span class="h">${esc(t('cloudWorkspaceHint'))}</span></label>
+      </div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn primary" id="clConnect">${esc(t('cloudConnect'))}</button>
+        <button class="btn sm" id="clSchema">${esc(t('cloudSchema'))}</button>
+        <span class="muted" id="clMsg"></span>
+      </div>`;
+    $('#clConnect').onclick=async()=>{
+      const url=$('#clUrl').value.trim(),key=$('#clKey').value.trim(),
+            email=$('#clEmail').value.trim(),pass=$('#clPass').value,ws=$('#clWs').value.trim()||'default';
+      if(!url||!key||!email||!pass){toast(t('cloudNeedAll'),true);return;}
+      $('#clMsg').textContent=t('cloudSyncing');
+      try{
+        await Cloud.signIn(url,key,email,pass,ws);
+        const row=await Cloud.fetchRemote();
+        if(row) firstConnectModal(row);
+        else{ await Cloud.put(); toast(t('cloudConnected')); }
+        Cloud.start();paintCloud();renderSettings();
+      }catch(e){$('#clMsg').textContent='✗ '+e.message;Cloud.status='error';}
+    };
+    $('#clSchema').onclick=schemaModal;
+    return;
+  }
+  const c=Cloud.cfg;
+  box.innerHTML=`
+    <div class="cloud-row">
+      <span class="dot ${Cloud.status}"></span>
+      <b>${esc({idle:t('cloudSynced'),syncing:t('cloudSyncing'),error:t('cloudError'),
+                conflict:t('cloudConflict'),offline:t('cloudOffline')}[Cloud.status]||'')}</b>
+      <span class="muted">${esc(c.workspace)} · ${esc(c.email||'')}</span>
+      <div class="grow"></div>
+      <button class="btn sm" id="clSync">${esc(t('cloudSyncNow'))}</button>
+      <button class="btn sm" id="clDown">${esc(t('cloudPull'))}</button>
+      <button class="btn sm danger" id="clOut">${esc(t('cloudDisconnect'))}</button>
+    </div>
+    ${Cloud.msg?`<div class="note warn" style="margin-top:10px">${esc(Cloud.msg)}</div>`:''}
+    <div class="note" style="margin-top:10px">${esc(t('cloudActiveHint'))}</div>`;
+  $('#clSync').onclick=()=>{Cloud.sync();toast(t('cloudSyncing'));};
+  $('#clDown').onclick=()=>confirmBox(t('cloudPullConfirm'),async()=>{
+    try{const r=await Cloud.pull();render();toast(r?t('cloudPulled'):t('cloudEmpty'));}
+    catch(e){toast(e.message,true);}
+  });
+  $('#clOut').onclick=()=>confirmBox(t('cloudDisconnectConfirm'),()=>{Cloud.signOut();renderSettings();});
+}
+/* First connect against a workspace that already holds data: never guess. */
+function firstConnectModal(row){
+  const n=((row.data||{}).invoices||[]).length;
+  openModal(t('cloudFirstTitle'),
+    `<div class="note" style="margin-bottom:12px">${esc(t('cloudFirstHint'))}</div>
+     <div class="grid2">
+       <div class="party"><div class="sect-title">${esc(t('cloudThisDevice'))}</div>
+         <div class="pn">${S.invoices.length} ${esc(t('cloudInvoices'))}</div>
+         <div class="pd">${esc(S.seller.name||'—')}</div></div>
+       <div class="party"><div class="sect-title">${esc(t('cloudInCloud'))}</div>
+         <div class="pn">${n} ${esc(t('cloudInvoices'))}</div>
+         <div class="pd">${esc(((row.data||{}).seller||{}).name||'—')}<br>${esc(fmtDate((row.updated_at||'').slice(0,10)))}</div></div>
+     </div>`,
+    `<button class="btn" id="fcUp">${esc(t('cloudUseLocal'))}</button>
+     <button class="btn primary" id="fcDown">${esc(t('cloudUseCloud'))}</button>`,
+    ()=>{
+      $('#fcUp').onclick=async()=>{closeModal();try{await Cloud.put();toast(t('cloudConnected'));}
+        catch(e){toast(e.message,true);}paintCloud();};
+      $('#fcDown').onclick=async()=>{closeModal();try{await Cloud.pull();render();toast(t('cloudPulled'));}
+        catch(e){toast(e.message,true);}paintCloud();};
+    });
+}
+function conflictModal(row){
+  openModal(t('cloudConflict'),
+    `<div class="note warn" style="margin-bottom:12px">${esc(t('cloudConflictHint'))}</div>
+     <div class="grid2">
+       <div class="party"><div class="sect-title">${esc(t('cloudThisDevice'))}</div>
+         <div class="pn">${S.invoices.length} ${esc(t('cloudInvoices'))}</div></div>
+       <div class="party"><div class="sect-title">${esc(t('cloudInCloud'))}</div>
+         <div class="pn">${(((row.data||{}).invoices)||[]).length} ${esc(t('cloudInvoices'))}</div>
+         <div class="pd">${esc((row.updated_by||''))} · ${esc((row.updated_at||'').replace('T',' ').slice(0,16))}</div></div>
+     </div>`,
+    `<button class="btn" id="cfDown">${esc(t('cloudUseCloud'))}</button>
+     <button class="btn primary" id="cfUp">${esc(t('cloudUseLocal'))}</button>`,
+    ()=>{
+      $('#cfUp').onclick=async()=>{closeModal();Cloud.seen=row.updated_at;
+        try{await Cloud.put();Cloud.status='idle';toast(t('saved'));}catch(e){toast(e.message,true);}
+        paintCloud();};
+      $('#cfDown').onclick=async()=>{closeModal();
+        try{await Cloud.pull();Cloud.status='idle';render();toast(t('cloudPulled'));}
+        catch(e){toast(e.message,true);}paintCloud();};
+    });
+}
+const CLOUD_SQL=`-- Sąskaitos faktūros — Supabase schema.
+-- Run once: Supabase → SQL Editor → paste → Run.
+-- One workspace = one JSON document. Locked to signed-in sessions: the
+-- publishable/anon key alone grants nothing.
+
+create table if not exists public.invoice_workspaces (
+  id          text primary key,
+  data        jsonb not null,
+  updated_at  timestamptz not null default now(),
+  updated_by  text
+);
+
+alter table public.invoice_workspaces enable row level security;
+drop policy if exists iw_all on public.invoice_workspaces;
+create policy iw_all on public.invoice_workspaces
+  for all to authenticated using (true) with check (true);
+
+-- Then: Authentication → Users → Add user (email + password).
+-- That email/password is what you type into the app.`;
+function schemaModal(){
+  openModal(t('cloudSchema'),
+    `<div class="note" style="margin-bottom:10px">${esc(t('cloudSchemaHint'))}</div>
+     <textarea id="sqlBox" style="min-height:300px;font-family:var(--mono);font-size:11.5px">${esc(CLOUD_SQL)}</textarea>`,
+    `<button class="btn" data-mclose>${esc(t('close'))}</button>
+     <button class="btn primary" id="sqlCopy">${esc(t('copy'))}</button>`,
+    ()=>{$('#sqlCopy').onclick=()=>{
+      const b=$('#sqlBox');b.select();
+      navigator.clipboard?navigator.clipboard.writeText(CLOUD_SQL).then(()=>toast(t('copied'))):document.execCommand('copy');
+    };});
+}
+
 /* ===================== exports ===================== */
 function download(name,text,mime){
   const blob=new Blob([text],{type:mime||'text/plain;charset=utf-8'});
@@ -1920,9 +2480,7 @@ function importBackup(file){
     try{
       const p=JSON.parse(rd.result);
       if(!p||typeof p!=='object'||!('invoices'in p))throw new Error('shape');
-      S=Object.assign(blankState(),p);
-      S.seller=Object.assign(blankState().seller,p.seller||{});
-      S.settings=Object.assign(blankState().settings,p.settings||{});
+      adopt(p);
       saveNow();EDIT=null;go('dash');toast(t('importOk'));
     }catch(e){toast(t('importBad'),true);}
   };
@@ -1954,7 +2512,7 @@ function mailInvoice(inv){
   location.href=`mailto:${encodeURIComponent(b.email||'')}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
 }
 /* EN 16931 / UBL 2.1 — the shape the Lithuanian e-invoice gateway accepts. */
-function exportUbl(inv){
+function ublXml(inv){
   const c=calc(inv),s=S.seller,b=inv.buyer||{};
   const x=v=>String(v==null?'':v).replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
   const cy=inv.currency||cur();
@@ -2004,11 +2562,144 @@ function exportUbl(inv){
     <cac:Price><cbc:PriceAmount currencyID="${x(cy)}">${num(l.price).toFixed(4)}</cbc:PriceAmount></cac:Price>
   </cac:InvoiceLine>`).join('')}
 </Invoice>`;
-  download(`${slug(inv.no)}.xml`,xml,'application/xml');
+  return xml;
 }
+function exportUbl(inv){download(`${slug(inv.no)}.xml`,ublXml(inv),'application/xml');}
 </script>
 
 <script>
+/* =========================================================================
+   Minimal ZIP writer — "export everything" ships one archive holding the JSON
+   backup, four CSVs, a printable HTML per invoice and a UBL XML per invoice.
+   No library: entries are deflated with CompressionStream when the browser has
+   it and stored uncompressed otherwise.
+   ========================================================================= */
+const CRC_TABLE=(()=>{
+  const tb=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);tb[n]=c>>>0;}
+  return tb;
+})();
+function crc32(buf){
+  let c=0xFFFFFFFF;
+  for(let i=0;i<buf.length;i++)c=CRC_TABLE[(c^buf[i])&0xFF]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0;
+}
+async function deflateRaw(bytes){
+  if(typeof CompressionStream!=='function')return null;
+  try{
+    const cs=new CompressionStream('deflate-raw');
+    const ab=await new Response(new Blob([bytes]).stream().pipeThrough(cs)).arrayBuffer();
+    return new Uint8Array(ab);
+  }catch(e){return null;}
+}
+/* files: [{name, text}] or [{name, bytes}] */
+async function makeZip(files){
+  const enc=new TextEncoder(),parts=[],central=[];
+  let offset=0;
+  const dt=new Date();
+  const dosTime=((dt.getHours()<<11)|(dt.getMinutes()<<5)|(dt.getSeconds()>>1))&0xFFFF;
+  const dosDate=(((dt.getFullYear()-1980)<<9)|((dt.getMonth()+1)<<5)|dt.getDate())&0xFFFF;
+  for(const f of files){
+    const nameB=enc.encode(f.name);
+    const raw=f.bytes||enc.encode(f.text||'');
+    const crc=crc32(raw);
+    const comp=await deflateRaw(raw);
+    const useDeflate=!!comp&&comp.length<raw.length;
+    const body=useDeflate?comp:raw;
+    const method=useDeflate?8:0;
+
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0x0800,true);
+    lh.setUint16(8,method,true); lh.setUint16(10,dosTime,true); lh.setUint16(12,dosDate,true);
+    lh.setUint32(14,crc,true); lh.setUint32(18,body.length,true); lh.setUint32(22,raw.length,true);
+    lh.setUint16(26,nameB.length,true); lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer),nameB,body);
+
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true);
+    ch.setUint16(8,0x0800,true); ch.setUint16(10,method,true);
+    ch.setUint16(12,dosTime,true); ch.setUint16(14,dosDate,true);
+    ch.setUint32(16,crc,true); ch.setUint32(20,body.length,true); ch.setUint32(24,raw.length,true);
+    ch.setUint16(28,nameB.length,true); ch.setUint32(42,offset,true);
+    central.push(new Uint8Array(ch.buffer),nameB);
+
+    offset+=30+nameB.length+body.length;
+  }
+  const cdStart=offset;
+  let cdSize=0;
+  central.forEach(c=>cdSize+=c.length);
+  const end=new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true);
+  end.setUint16(8,files.length,true); end.setUint16(10,files.length,true);
+  end.setUint32(12,cdSize,true); end.setUint32(16,cdStart,true);
+  return new Blob([...parts,...central,new Uint8Array(end.buffer)],{type:'application/zip'});
+}
+
+function csvOf(head,rows){
+  const q=v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`;
+  return '﻿'+[head,...rows].map(r=>r.map(q).join(';')).join('\r\n');
+}
+/* Everything the app knows, in one archive. */
+async function exportEverything(){
+  const stamp=today();
+  const root=`saskaitos-${stamp}/`;
+  const files=[];
+  files.push({name:root+'duomenys.json',text:JSON.stringify(S,null,2)});
+
+  files.push({name:root+'saskaitos.csv',text:csvOf(
+    ['Nr','Tipas','Data','Terminas','Pirkejas','Imones kodas','PVM kodas','Adresas',
+     'Suma be PVM','PVM','Viso','Apmoketa','Likutis','Busena','Valiuta','Pastabos'],
+    S.invoices.map(i=>{const c=calc(i),b=i.buyer||{};
+      return [i.no,i.type,i.date,i.dueDate,b.name||'',b.code||'',b.vat||'',b.address||'',
+              c.net.toFixed(2),c.vat.toFixed(2),c.total.toFixed(2),c.paid.toFixed(2),c.due.toFixed(2),
+              t(STATUS_LABEL[invStatus(i)]),i.currency||cur(),(i.notes||'').replace(/\s+/g,' ')];}))});
+
+  const lineRows=[];
+  S.invoices.forEach(i=>(i.lines||[]).forEach((l,n)=>lineRows.push(
+    [i.no,i.date,(i.buyer||{}).name||'',n+1,l.name,num(l.qty),l.unit||'',
+     num(l.price).toFixed(4),num(l.disc),num(l.vat),lineNet(l).toFixed(2)])));
+  files.push({name:root+'eilutes.csv',text:csvOf(
+    ['Saskaitos Nr','Data','Pirkejas','Eil','Pavadinimas','Kiekis','Mato vnt','Kaina','Nuolaida %','PVM %','Suma be PVM'],
+    lineRows)});
+
+  files.push({name:root+'pirkejai.csv',text:csvOf(
+    ['Pavadinimas','Tipas','Imones kodas','PVM kodas','Adresas','El. pastas','Telefonas','Kontaktinis asmuo','Terminas','Pastaba'],
+    S.customers.map(c=>[c.name,c.kind||'company',c.code||'',c.vat||'',c.address||'',c.email||'',
+                        c.phone||'',c.contact||'',c.term==null?'':c.term,c.note||'']))});
+
+  files.push({name:root+'prekes.csv',text:csvOf(
+    ['Pavadinimas','Kodas','Mato vnt','Kaina be PVM','PVM %','Panaudota'],
+    S.items.map(i=>[i.name,i.code||'',i.unit||'',num(i.price).toFixed(2),num(i.vat),i.used||0]))});
+
+  S.invoices.forEach(i=>{
+    const fn=slug(i.no||i.id);
+    files.push({name:root+'saskaitos/'+fn+'.html',text:invoiceHtml(i,{standalone:true})});
+    files.push({name:root+'xml/'+fn+'.xml',text:ublXml(i)});
+  });
+
+  files.push({name:root+'SKAITYK.txt',text:
+`Sąskaitos faktūros — pilnas eksportas ${stamp}
+
+duomenys.json     visa programos būsena (atkūrimui: Nustatymai → Atkurti iš failo)
+saskaitos.csv     sąskaitų registras (Excel: atidaryti tiesiogiai)
+eilutes.csv       visos sąskaitų eilutės — buhalterijai
+pirkejai.csv      pirkėjų sąrašas
+prekes.csv        prekių ir paslaugų katalogas
+saskaitos/*.html  kiekviena sąskaita atskirai — atidaryti naršyklėje ir spausdinti į PDF
+xml/*.xml         e-sąskaitos (UBL 2.1 / EN 16931)
+
+Sąskaitų: ${S.invoices.length}   Pirkėjų: ${S.customers.length}   Prekių: ${S.items.length}
+`});
+
+  const blob=await makeZip(files);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=`saskaitos-${stamp}.zip`;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},600);
+  toast(t('exportAllDone')+' · '+files.length+' '+t('exportFiles'));
+  return files;
+}
+
 /* =========================================================================
    Printable invoice — opened in a new window that calls print() itself, the
    same "PDF" route the offer app uses. Carries every field the Lithuanian
@@ -2017,22 +2708,150 @@ function exportUbl(inv){
 function docTitleKey(inv){
   return {invoice:'pdfInvoice',simple:'pdfSimple',proforma:'pdfProforma',credit:'pdfCredit'}[inv.type]||'pdfInvoice';
 }
-function printInvoice(inv){
-  const s=S.seller,b=inv.buyer||{},c=calc(inv),cfg=S.settings;
+function docTitle(inv){
+  const custom=((S.brand||{}).titles||{})[inv.type];
+  return (custom&&custom.trim())||t(docTitleKey(inv));
+}
+
+/* Three document looks. Only colours, borders and weights differ — the markup
+   and therefore every legally required field is identical in all of them. */
+const FONTS={
+  sans:'"Inter",-apple-system,Segoe UI,Roboto,Arial,sans-serif',
+  serif:'"Iowan Old Style",Georgia,"Times New Roman",serif',
+  mono:'ui-monospace,"SF Mono",Menlo,Consolas,monospace'
+};
+function brandCss(b){
+  const acc=b.accent||'#2f54eb';
+  const dark=shade(acc,-38);
+  const base=`
+@page{size:A4;margin:14mm}
+body{font-family:${FONTS[b.font]||FONTS.sans};color:#1b1e26;margin:0;font-size:12px;line-height:1.5}
+.wrap{max-width:780px;margin:0 auto;padding:20px;position:relative}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.brandimg{max-height:${Math.max(20,Math.min(140,num(b.logoH)||66))}px;max-width:250px;display:block;margin-bottom:8px}
+.logo{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;letter-spacing:.04em;background:#1b1e26;color:#fff;padding:6px 12px;border-radius:6px;font-size:14px;display:inline-block}
+.sname{font-weight:700;font-size:15px;letter-spacing:-.01em;margin-top:6px}
+.headline{color:#7a8290;font-size:11px;margin-top:3px;white-space:pre-wrap}
+.doc{text-align:right;flex:none}
+.doc h1{font-size:19px;margin:0 0 8px;letter-spacing:-.015em;font-weight:750;text-transform:uppercase}
+.doc .meta{color:#7a8290;font-size:11.5px;line-height:1.85}.doc .meta b{color:#1b1e26;font-size:13px}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.pl{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#9aa3b2;font-weight:700}
+.pn{font-size:14px;font-weight:700;margin-top:4px;letter-spacing:-.01em}
+.pv{color:#5b6472;font-size:11px;line-height:1.75;margin-top:4px}
+table{width:100%;border-collapse:collapse;margin-bottom:6px}
+th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#9aa3b2;padding:8px 9px;font-weight:700}
+td{padding:9px;vertical-align:top}
+td.c,th.c{text-align:center;white-space:nowrap}
+td.r,th.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tbody tr{page-break-inside:avoid}
+.totals{margin-top:14px;margin-left:auto;width:330px}
+.totals .tr{display:flex;justify-content:space-between;padding:7px 2px}
+.totals .tr .tl{color:#667085}.totals .tr .tv{font-variant-numeric:tabular-nums;font-weight:600}
+.words{margin-top:14px;font-size:11.5px}
+.words .wl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b2;font-weight:700}
+.bank{margin-top:20px;padding:13px 16px;page-break-inside:avoid}
+.bank .bl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b2;font-weight:700;margin-bottom:5px}
+.bank .bi{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.8}
+.remarks{margin-top:16px;padding:13px 16px;page-break-inside:avoid;white-space:pre-wrap}
+.remarks .rl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b2;font-weight:700;margin-bottom:5px}
+.signs{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:38px;page-break-inside:avoid}
+.sig .sl{font-size:9.5px;color:#9aa3b2;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.sig .sline{border-bottom:1px solid #b9c0cb;height:26px;margin-top:16px;position:relative}
+.sig .stamp{position:absolute;left:0;bottom:2px;max-height:52px;max-width:190px}
+.sig .sn{font-size:10.5px;color:#5b6472;margin-top:5px}
+.foot{margin-top:26px;padding-top:13px;color:#9aa3b2;font-size:10px;display:flex;justify-content:space-between;gap:16px;white-space:pre-wrap}
+.paidmark{position:absolute;top:190px;right:34px;border:3px solid ${acc};color:${acc};opacity:.26;
+  font-size:34px;font-weight:800;letter-spacing:.08em;padding:6px 20px;border-radius:9px;transform:rotate(-13deg);pointer-events:none}
+.noprint{position:fixed;bottom:18px;right:18px;z-index:9}
+.noprint button{font:inherit;cursor:pointer;background:${acc};color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:600;box-shadow:0 3px 10px rgba(20,24,33,.28)}
+@media print{.noprint{display:none}.wrap{padding:0}}
+`;
+  const skins={
+    modern:`
+.rule{height:3px;background:linear-gradient(90deg,${acc},${dark} 70%,#1b1e26);border-radius:3px;margin:12px 0 20px}
+.pty{background:#f5f7fb;border:1px solid #e6e8ed;border-radius:11px;padding:12px 15px}
+th{border-bottom:2px solid #1b1e26}
+td{border-bottom:1px solid #eef0f3}
+.totals .tr{border-bottom:1px solid #eef0f3}
+.totals .grand{margin-top:8px;background:#1b1e26;color:#fff;border-radius:11px;padding:13px 17px;display:flex;justify-content:space-between;align-items:center;gap:14px}
+.totals .grand .tl{color:#c9d4ff;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.totals .grand .tv{font-size:20px;font-weight:750;font-variant-numeric:tabular-nums}
+.bank{border:1px solid #e6e8ed;border-left:3px solid ${acc};border-radius:11px;background:#fbfcfe}
+.remarks{border:1px solid #e6e8ed;border-radius:11px;background:#fbfcfe}
+.foot{border-top:1px solid #e6e8ed}
+.doc h1{color:#1b1e26}`,
+    classic:`
+.rule{height:0;border-top:2px solid #1b1e26;border-bottom:1px solid #1b1e26;height:3px;margin:12px 0 20px}
+.pty{border:1px solid #1b1e26;padding:11px 14px}
+.pl{color:#1b1e26}
+th{border-top:1px solid #1b1e26;border-bottom:1px solid #1b1e26;color:#1b1e26;background:#f2f3f5}
+td{border-bottom:1px solid #dcdfe4}
+.totals .tr{border-bottom:1px solid #dcdfe4}
+.totals .grand{margin-top:6px;border-top:2px solid #1b1e26;border-bottom:2px solid #1b1e26;padding:11px 2px;display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+.totals .grand .tl{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.totals .grand .tv{font-size:18px;font-weight:750;font-variant-numeric:tabular-nums}
+.bank{border:1px solid #1b1e26}
+.remarks{border:1px solid #dcdfe4}
+.foot{border-top:1px solid #1b1e26}
+.wl,.bl,.rl,.sig .sl{color:#1b1e26}`,
+    minimal:`
+.rule{height:1px;background:#dcdfe4;margin:14px 0 22px}
+.pty{padding:0 0 0 11px;border-left:2px solid ${acc}}
+th{border-bottom:1px solid #dcdfe4}
+td{border-bottom:1px solid #f1f2f5}
+.totals .tr{border-bottom:1px solid #f1f2f5}
+.totals .grand{margin-top:8px;padding:11px 2px;display:flex;justify-content:space-between;align-items:baseline;gap:14px;border-top:2px solid ${acc}}
+.totals .grand .tl{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:${dark}}
+.totals .grand .tv{font-size:19px;font-weight:750;font-variant-numeric:tabular-nums}
+.bank{padding:0;margin-top:22px}
+.remarks{padding:0;margin-top:18px}
+.foot{border-top:1px solid #f1f2f5}
+.doc h1{color:${dark};font-weight:600;letter-spacing:.02em}`
+  };
+  return base+(skins[b.template]||skins.modern);
+}
+/* darken/lighten a #rrggbb by pct */
+function shade(hex,pct){
+  const m=/^#?([0-9a-f]{6})$/i.exec(String(hex||''));
+  if(!m)return '#1e3aa8';
+  const n=parseInt(m[1],16);
+  const f=c=>Math.max(0,Math.min(255,Math.round(c+(pct/100)*(pct<0?c:255-c))));
+  return '#'+[f(n>>16&255),f(n>>8&255),f(n&255)].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+
+/* The printable document. Also used verbatim by the ZIP export, which is why
+   it returns a string instead of writing to a window. */
+function invoiceHtml(inv,opt){
+  opt=opt||{};
+  const s=S.seller,b=inv.buyer||{},c=calc(inv),cfg=S.settings,br=Object.assign(blankBrand(),S.brand||{});
   const showD=cfg.showDisc&&(inv.lines||[]).some(l=>num(l.disc));
   const cy=inv.currency||cur();
   const banks=(s.banks||[]).filter(x=>x.iban);
-  const cols=6+(showD?1:0);
+  const paid=invStatus(inv)==='paid';
 
-  const rows=(inv.lines||[]).filter(l=>String(l.name||'').trim()||num(l.price)).map((l,i)=>`
-    <tr><td class="c">${i+1}</td><td>${esc(l.name)}</td>
-      <td class="c">${num(l.qty)}</td><td class="c">${esc(l.unit||'')}</td>
-      <td class="r">${money(l.price)}</td>
-      ${showD?`<td class="r">${num(l.disc)?num(l.disc)+'%':'—'}</td>`:''}
-      <td class="r">${num(l.vat)}%</td>
-      <td class="r">${money(lineNet(l))}</td></tr>`).join('');
+  const cols=1+(br.showLineNo?0:0);
+  const head=[br.showLineNo?`<th class="c" style="width:26px">${esc(t('pdfNo'))}</th>`:'',
+    `<th>${esc(t('pdfItem'))}</th>`,
+    `<th class="c">${esc(t('pdfQty'))}</th>`,
+    br.showUnit?`<th class="c">${esc(t('pdfUnit'))}</th>`:'',
+    `<th class="r">${esc(t('pdfPrice'))}</th>`,
+    showD?`<th class="r">${esc(t('pdfDisc'))}</th>`:'',
+    br.showVatCol?`<th class="r">${esc(t('pdfVatRate'))}</th>`:'',
+    `<th class="r">${esc(t('pdfSum'))}</th>`].filter(Boolean).join('');
+  const span=head.split('<th').length-1;
 
-  const partyHtml=(title,p,extra)=>`
+  const rows=(inv.lines||[]).filter(l=>String(l.name||'').trim()||num(l.price)).map((l,i)=>
+    '<tr>'+[br.showLineNo?`<td class="c">${i+1}</td>`:'',
+      `<td>${esc(l.name)}</td>`,
+      `<td class="c">${num(l.qty)}</td>`,
+      br.showUnit?`<td class="c">${esc(l.unit||'')}</td>`:'',
+      `<td class="r">${money(l.price)}</td>`,
+      showD?`<td class="r">${num(l.disc)?num(l.disc)+'%':'—'}</td>`:'',
+      br.showVatCol?`<td class="r">${num(l.vat)}%</td>`:'',
+      `<td class="r">${money(lineNet(l))}</td>`].filter(Boolean).join('')+'</tr>').join('');
+
+  const party=(title,p,extra)=>`
     <div class="pty"><div class="pl">${esc(title)}</div>
       <div class="pn">${esc(p.name||'')}</div>
       <div class="pv">${[
@@ -2041,75 +2860,26 @@ function printInvoice(inv){
         p.address||'',p.phone||'',p.email||''
       ].filter(Boolean).map(esc).join('<br>')}${extra||''}</div></div>`;
 
-  const html=`<!DOCTYPE html><html lang="${LANG}"><head><meta charset="utf-8">
-<title>${esc(t(docTitleKey(inv)))} ${esc(inv.no)}</title>
-<style>
-@page{size:A4;margin:14mm}
-body{font-family:"Inter",-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b1e26;margin:0;font-size:12px;line-height:1.5}
-.wrap{max-width:780px;margin:0 auto;padding:20px}
-.top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
-.brandimg{max-height:66px;max-width:230px;display:block;margin-bottom:8px}
-.logo{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;letter-spacing:.04em;background:#1b1e26;color:#fff;padding:6px 12px;border-radius:6px;font-size:14px;display:inline-block}
-.sname{font-weight:700;font-size:15px;letter-spacing:-.01em;margin-top:6px}
-.doc{text-align:right;flex:none}
-.doc h1{font-size:19px;margin:0 0 8px;letter-spacing:-.015em;font-weight:750;text-transform:uppercase}
-.doc .meta{color:#7a8290;font-size:11.5px;line-height:1.85}.doc .meta b{color:#1b1e26;font-size:13px}
-.rule{height:3px;background:linear-gradient(90deg,#2f54eb,#1e3aa8 70%,#1b1e26);border-radius:3px;margin:12px 0 20px}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
-.pty{background:#f5f7fb;border:1px solid #e6e8ed;border-radius:11px;padding:12px 15px}
-.pl{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#9aa3b2;font-weight:700}
-.pn{font-size:14px;font-weight:700;margin-top:4px;letter-spacing:-.01em}
-.pv{color:#5b6472;font-size:11px;line-height:1.75;margin-top:4px}
-table{width:100%;border-collapse:collapse;margin-bottom:6px}
-th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#9aa3b2;border-bottom:2px solid #1b1e26;padding:8px 9px;font-weight:700}
-td{padding:9px;border-bottom:1px solid #eef0f3;vertical-align:top}
-td.c,th.c{text-align:center;white-space:nowrap}
-td.r,th.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-tbody tr{page-break-inside:avoid}
-.totals{margin-top:14px;margin-left:auto;width:320px}
-.totals .tr{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid #eef0f3}
-.totals .tr .tl{color:#667085}.totals .tr .tv{font-variant-numeric:tabular-nums;font-weight:600}
-.totals .grand{margin-top:8px;background:#1b1e26;color:#fff;border-radius:11px;padding:13px 17px;display:flex;justify-content:space-between;align-items:center;gap:14px}
-.totals .grand .tl{color:#c9d4ff;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
-.totals .grand .tv{font-size:20px;font-weight:750;font-variant-numeric:tabular-nums}
-.words{margin-top:14px;font-size:11.5px}.words b{font-weight:600}
-.words .wl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b2;font-weight:700}
-.bank{margin-top:20px;border:1px solid #e6e8ed;border-left:3px solid #2f54eb;border-radius:11px;padding:13px 16px;background:#fbfcfe;page-break-inside:avoid}
-.bank .bl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b2;font-weight:700;margin-bottom:5px}
-.bank .bi{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.8}
-.remarks{margin-top:16px;border:1px solid #e6e8ed;border-radius:11px;padding:13px 16px;background:#fbfcfe;page-break-inside:avoid;white-space:pre-wrap}
-.remarks .rl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b2;font-weight:700;margin-bottom:5px}
-.signs{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:38px;page-break-inside:avoid}
-.sig .sl{font-size:9.5px;color:#9aa3b2;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
-.sig .sline{border-bottom:1px solid #b9c0cb;height:26px;margin-top:16px}
-.sig .sn{font-size:10.5px;color:#5b6472;margin-top:5px}
-.foot{margin-top:26px;border-top:1px solid #e6e8ed;padding-top:13px;color:#9aa3b2;font-size:10px;display:flex;justify-content:space-between;gap:16px;white-space:pre-wrap}
-.noprint{position:fixed;bottom:18px;right:18px;z-index:9}
-.noprint button{font:inherit;cursor:pointer;background:#2f54eb;color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:600;box-shadow:0 3px 10px rgba(47,84,235,.32)}
-@media print{.noprint{display:none}.wrap{padding:0}}
-</style></head><body>
-<div class="noprint"><button onclick="window.print()">${esc(t('pdfPrintSave'))}</button></div>
+  const body=`
 <div class="wrap">
+  ${paid&&br.paidStamp?`<div class="paidmark">${esc(t('pdfPaid')).toUpperCase()}</div>`:''}
   <div class="top">
-    <div>${s.logo?`<img class="brandimg" src="${s.logo}">`:`<span class="logo">${esc((s.name||'SF').slice(0,3).toUpperCase())}</span>`}
-      <div class="sname">${esc(s.name||'')}</div></div>
-    <div class="doc"><h1>${esc(t(docTitleKey(inv)))}</h1>
+    <div>${br.showLogo&&s.logo?`<img class="brandimg" src="${s.logo}">`
+        :`<span class="logo">${esc((s.name||'SF').slice(0,3).toUpperCase())}</span>`}
+      <div class="sname">${esc(s.name||'')}</div>
+      ${br.headline?`<div class="headline">${esc(br.headline)}</div>`:''}</div>
+    <div class="doc"><h1>${esc(docTitle(inv))}</h1>
       <div class="meta">${esc(t('pdfSeriesNo'))} <b>${esc(inv.no||'')}</b><br>
         ${esc(t('pdfDate'))}: ${esc(fmtDate(inv.date))}<br>
         ${esc(t('pdfDue'))}: <b>${esc(fmtDate(inv.dueDate))}</b></div></div>
   </div>
   <div class="rule"></div>
   <div class="parties">
-    ${partyHtml(t('pdfSeller'),s,'')}
-    ${partyHtml(t('pdfBuyer'),b,b.contact?'<br>'+esc(b.contact):'')}
+    ${party(t('pdfSeller'),s,'')}
+    ${party(t('pdfBuyer'),b,b.contact?'<br>'+esc(b.contact):'')}
   </div>
-  <table><thead><tr>
-    <th class="c" style="width:26px">${esc(t('pdfNo'))}</th><th>${esc(t('pdfItem'))}</th>
-    <th class="c">${esc(t('pdfQty'))}</th><th class="c">${esc(t('pdfUnit'))}</th>
-    <th class="r">${esc(t('pdfPrice'))}</th>
-    ${showD?`<th class="r">${esc(t('pdfDisc'))}</th>`:''}
-    <th class="r">${esc(t('pdfVatRate'))}</th><th class="r">${esc(t('pdfSum'))}</th></tr></thead>
-    <tbody>${rows||`<tr><td colspan="${cols+1}" class="c">—</td></tr>`}</tbody></table>
+  <table><thead><tr>${head}</tr></thead>
+    <tbody>${rows||`<tr><td colspan="${span}" class="c">—</td></tr>`}</tbody></table>
   <div class="totals">
     <div class="tr"><div class="tl">${esc(t('pdfSubtotal'))}</div><div class="tv">${money(c.net)} ${esc(cy)}</div></div>
     ${c.vatRows.filter(v=>v.rate>0).map(v=>`<div class="tr"><div class="tl">${esc(t('pdfVatSum'))} ${v.rate}%</div><div class="tv">${money(v.amt)} ${esc(cy)}</div></div>`).join('')}
@@ -2117,23 +2887,34 @@ tbody tr{page-break-inside:avoid}
     ${c.paid?`<div class="tr" style="margin-top:8px"><div class="tl">${esc(t('pdfPaid'))}</div><div class="tv">${money(c.paid)} ${esc(cy)}</div></div>
       <div class="tr"><div class="tl"><b>${esc(t('pdfDueNow'))}</b></div><div class="tv"><b>${money(c.due)} ${esc(cy)}</b></div></div>`:''}
   </div>
-  ${cfg.showWords?`<div class="words"><div class="wl">${esc(t('pdfWords'))}</div><b>${esc(amountWords(c.total))}</b></div>`:''}
-  ${banks.length?`<div class="bank"><div class="bl">${esc(t('setBanks'))}</div><div class="bi">
+  ${br.showWords?`<div class="words"><div class="wl">${esc(t('pdfWords'))}</div><b>${esc(amountWords(c.total))}</b></div>`:''}
+  ${br.showBank&&banks.length?`<div class="bank"><div class="bl">${esc(t('setBanks'))}</div><div class="bi">
      ${banks.map(k=>esc([k.bank,k.iban,k.swift].filter(Boolean).join('  ·  '))).join('<br>')}</div></div>`:''}
-  ${inv.notes?`<div class="remarks"><div class="rl">${esc(t('pdfNotes'))}</div>${esc(inv.notes)}</div>`:''}
-  ${cfg.showSign?`<div class="signs">
-     <div class="sig"><div class="sl">${esc(t('pdfIssued'))}</div><div class="sline"></div><div class="sn">${esc(inv.issuer||s.director||'')}</div></div>
-     <div class="sig"><div class="sl">${esc(t('pdfReceived'))}</div><div class="sline"></div><div class="sn">${esc(inv.receiver||'')}</div></div>
+  ${br.showNotes&&inv.notes?`<div class="remarks"><div class="rl">${esc(t('pdfNotes'))}</div>${esc(inv.notes)}</div>`:''}
+  ${br.showSign?`<div class="signs">
+     <div class="sig"><div class="sl">${esc(t('pdfIssued'))}</div>
+       <div class="sline">${br.stamp?`<img class="stamp" src="${br.stamp}">`:''}</div>
+       <div class="sn">${esc(inv.issuer||s.director||'')}</div></div>
+     <div class="sig"><div class="sl">${esc(t('pdfReceived'))}</div><div class="sline"></div>
+       <div class="sn">${esc(inv.receiver||'')}</div></div>
    </div>`:''}
-  <div class="foot"><div>${esc(cfg.footer||'')}</div>
-    <div>${esc([s.web,s.email,s.phone].filter(Boolean).join(' · '))}</div></div>
-</div>
-<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},380)}<\/script>
-</body></html>`;
+  ${br.showFooter?`<div class="foot"><div>${esc(cfg.footer||'')}</div>
+    <div>${esc([s.web,s.email,s.phone].filter(Boolean).join(' · '))}</div></div>`:''}
+</div>`;
 
+  if(opt.bodyOnly)return `<style>${brandCss(br)}</style>`+body;
+  return `<!DOCTYPE html><html lang="${LANG}"><head><meta charset="utf-8">
+<title>${esc(docTitle(inv))} ${esc(inv.no)}</title>
+<style>${brandCss(br)}</style></head><body>
+${opt.standalone?'':`<div class="noprint"><button onclick="window.print()">${esc(t('pdfPrintSave'))}</button></div>`}
+${body}
+${opt.standalone?'':'<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},380)}<\/script>'}
+</body></html>`;
+}
+function printInvoice(inv){
   const w=window.open('','_blank');
   if(!w){toast(t('popupBlocked'),true);return;}
-  w.document.open();w.document.write(html);w.document.close();
+  w.document.open();w.document.write(invoiceHtml(inv));w.document.close();
 }
 
 /* =========================================================================
@@ -2147,9 +2928,12 @@ Object.defineProperties(window,{
   VIEW: {get:()=>VIEW, set:v=>{VIEW=v}, configurable:true},
   LANG: {get:()=>LANG, configurable:true},
   I18N: {get:()=>I18N, configurable:true},
-  REG:  {get:()=>REG,  configurable:true}
+  REG:  {get:()=>REG,  configurable:true},
+  Cloud:{get:()=>Cloud,configurable:true},
+  STATE_V:{get:()=>STATE_V,configurable:true},
+  CLOUD_SQL:{get:()=>CLOUD_SQL,configurable:true}
 });
-Object.assign(window,{t,esc,num,r2,uid,deacc,normQ,money,today,cur,lineNet,eurStr});
+Object.assign(window,{t,esc,num,r2,uid,deacc,normQ,money,today,cur,lineNet,eurStr,shade});
 
 /* ===================== boot ===================== */
 function boot(){
@@ -2160,6 +2944,7 @@ function boot(){
   $('#btnExport').onclick=exportBackup;
   $('#btnImport').onclick=()=>$('#fileIn').click();
   $('#fileIn').onchange=e=>{const f=e.target.files[0];if(f)importBackup(f);e.target.value='';};
+  $('#cloudChip').onclick=cloudChipClick;
   $('#modalX').onclick=closeModal;
   $('#scrim').onclick=e=>{if(e.target===$('#scrim'))closeModal();};
   document.addEventListener('keydown',e=>{
@@ -2171,6 +2956,9 @@ function boot(){
   go(TABS.some(x=>x.id===h&&h!=='editor')?h:'dash');
   /* If the registry was downloaded before, bring it back silently. */
   REG.loadIfCached().then(ok=>{if(ok&&VIEW==='settings')paintRegPanel();});
+  Cloud.load();paintCloud();Cloud.start();
+  window.addEventListener('online',()=>{if(Cloud.on())Cloud.sync();});
+  window.addEventListener('offline',()=>{if(Cloud.on()){Cloud.status='offline';paintCloud();}});
   window.addEventListener('beforeunload',saveNow);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
