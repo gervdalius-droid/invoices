@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sąskaitos faktūros</title>
+<style>
+  :root{
+    --bench:#eceef2;--paper:#ffffff;--ink:#1b1e26;--ink2:#667085;
+    --line:#e6e8ed;--line2:#d2d7df;--acc:#2f54eb;--acc-d:#1e3aa8;
+    --good:#15803d;--good-bg:#e8f6ee;--bad:#dc2626;--bad-bg:#fdeaea;
+    --warn:#b45309;--warn-bg:#fdf3e3;--chip:#eef1f6;
+    --shadow:0 1px 2px rgba(20,24,33,.06),0 1px 1px rgba(20,24,33,.04);
+    --shadow-l:0 10px 32px rgba(20,24,33,.14),0 2px 8px rgba(20,24,33,.08);
+    --mono:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--sans);background:var(--bench);color:var(--ink);font-size:13px;line-height:1.45;-webkit-text-size-adjust:100%}
+  h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+  a{color:var(--acc-d)}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .hide{display:none !important}
+
+  /* ---------- header ---------- */
+  header{position:sticky;top:0;z-index:30;background:var(--ink);color:#e8ebf0;border-bottom:3px solid var(--acc)}
+  .hwrap{max-width:1340px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:9px 16px}
+  .brand{display:flex;align-items:center;gap:11px;min-width:0}
+  .brand .logo{font-family:var(--mono);font-weight:700;letter-spacing:.04em;background:var(--acc);color:#fff;padding:3px 8px;border-radius:4px;font-size:12px}
+  .brand h1{font-size:15px;white-space:nowrap}
+  .brand .sub{color:#9aa3b2;font-size:11px;font-family:var(--mono);white-space:nowrap}
+  .hspace{flex:1}
+  .hbtns{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .hbtns button{font:inherit;cursor:pointer;border:1px solid #2c3340;background:#232a36;color:#e8ebf0;border-radius:6px;padding:5px 10px;font-size:12px}
+  .hbtns button:hover{background:#353d4b}
+  .hbtns button.go{background:var(--acc);border-color:var(--acc);font-weight:600}
+  .hbtns button.go:hover{background:#4468f0}
+  .lang{display:inline-flex;border:1px solid #2c3340;border-radius:6px;overflow:hidden}
+  .lang button{border:0;border-radius:0;padding:5px 9px}
+  .lang button.on{background:var(--acc);color:#fff;font-weight:650}
+
+  /* ---------- tabs ---------- */
+  nav.tabs{position:sticky;top:51px;z-index:25;background:var(--paper);border-bottom:1px solid var(--line)}
+  .twrap{max-width:1340px;margin:0 auto;display:flex;gap:2px;padding:0 12px;overflow-x:auto;scrollbar-width:none}
+  .twrap::-webkit-scrollbar{display:none}
+  nav.tabs button{font:inherit;cursor:pointer;border:0;background:transparent;color:var(--ink2);padding:11px 14px;border-bottom:2.5px solid transparent;white-space:nowrap;font-weight:550}
+  nav.tabs button .ic{font-family:var(--mono);color:var(--line2);margin-right:6px}
+  nav.tabs button:hover{color:var(--ink)}
+  nav.tabs button.on{color:var(--ink);border-bottom-color:var(--acc)}
+  nav.tabs button.on .ic{color:var(--acc)}
+  nav.tabs button .badge{margin-left:6px;background:var(--bad);color:#fff;border-radius:20px;font-size:10px;padding:1px 6px;font-family:var(--mono);font-weight:700}
+
+  main{max-width:1340px;margin:0 auto;padding:18px 16px 90px}
+  .panel{display:none}.panel.on{display:block;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+  /* ---------- cards ---------- */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow);margin-bottom:16px}
+  .card>.head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .card>.head h2{font-size:14px}
+  .card>.body{padding:14px}
+  .card>.body.tight{padding:0}
+  .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc-d);font-weight:600}
+  .sect-title{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2);font-weight:700;margin:0 0 9px}
+
+  /* ---------- buttons ---------- */
+  .btn{font:inherit;cursor:pointer;border:1px solid var(--line2);background:#fff;color:var(--ink);border-radius:7px;padding:7px 12px;font-weight:550;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+  .btn:hover{border-color:var(--acc);color:var(--acc-d)}
+  .btn.primary{background:var(--acc);border-color:var(--acc-d);color:#fff}
+  .btn.primary:hover{background:var(--acc-d);color:#fff}
+  .btn.good{background:var(--good);border-color:#12692f;color:#fff}
+  .btn.good:hover{background:#12692f;color:#fff}
+  .btn.sm{padding:4px 9px;font-size:12px;border-radius:6px}
+  .btn.lg{padding:11px 18px;font-size:14px;border-radius:9px}
+  .btn.danger:hover{border-color:var(--bad);color:var(--bad)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .icon-btn{cursor:pointer;border:0;background:transparent;color:var(--ink2);font-family:var(--mono);font-size:14px;padding:2px 7px;border-radius:5px;line-height:1.4}
+  .icon-btn:hover{background:var(--chip);color:var(--bad)}
+  .icon-btn.mv:hover{color:var(--acc-d)}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+  /* ---------- forms ---------- */
+  label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink2)}
+  label.f span.l{font-weight:550;color:var(--ink)}
+  label.f span.h{font-size:11px;color:var(--ink2)}
+  input,select,textarea{font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line2);border-radius:6px;padding:6px 8px;width:100%}
+  textarea{resize:vertical;min-height:64px;line-height:1.5}
+  input:focus,select:focus,textarea:focus{outline:2px solid #b9c5f5;border-color:var(--acc)}
+  input[type=number]{font-family:var(--mono);text-align:right}
+  input[type=checkbox]{width:auto}
+  input:disabled{background:#f6f7f9;color:var(--ink2)}
+  .inline-check{display:flex;align-items:center;gap:7px;font-size:12.5px}
+  .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+  .grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+  @media(max-width:980px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:640px){.grid2,.grid3,.grid4{grid-template-columns:minmax(0,1fr)}}
+
+  /* ---------- tables ---------- */
+  .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:9px;background:var(--paper)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;background:var(--paper)}
+  th,td{padding:7px 9px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  thead th{position:sticky;top:0;background:#eef1f5;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);font-weight:650;z-index:1}
+  tbody tr.clickable{cursor:pointer}
+  tbody tr.clickable:hover{background:#f3f5f9}
+  td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  td input,td select{padding:4px 6px;border-radius:5px}
+  td input[type=number]{min-width:64px}
+  tfoot td{font-weight:650;background:#eef1f5;border-top:2px solid var(--line2)}
+  .empty{padding:34px 18px;text-align:center;color:var(--ink2)}
+  .empty .big{font-size:15px;color:var(--ink);font-weight:600;margin-bottom:5px}
+
+  /* ---------- chips / pills ---------- */
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 8px;border-radius:20px;background:var(--chip);color:var(--ink2);white-space:nowrap}
+  .pill.draft{background:var(--chip);color:var(--ink2)}
+  .pill.sent{background:#e8eeff;color:var(--acc-d)}
+  .pill.paid{background:var(--good-bg);color:var(--good)}
+  .pill.part{background:var(--warn-bg);color:var(--warn)}
+  .pill.over{background:var(--bad-bg);color:var(--bad)}
+  .muted{color:var(--ink2)}.right{text-align:right}.grow{flex:1}
+  .note{font-size:11.5px;color:var(--ink2);background:#eef3ff;border:1px solid #cdd9f5;border-radius:8px;padding:9px 11px}
+  .note b{color:var(--acc-d)}
+  .note.warn{background:var(--warn-bg);border-color:#f0dcb8}
+  .note.warn b{color:var(--warn)}
+
+  /* ---------- KPI ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+  @media(max-width:980px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .kpi{background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:13px 15px;box-shadow:var(--shadow)}
+  .kpi .kl{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink2);font-weight:700}
+  .kpi .kv{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:5px;letter-spacing:-.02em}
+  .kpi .ks{font-size:11.5px;color:var(--ink2);margin-top:2px}
+  .kpi.alert{border-color:#f3c7c7;background:#fffafa}
+  .kpi.alert .kv{color:var(--bad)}
+  .kpi.ok .kv{color:var(--good)}
+
+  /* ---------- combo / autocomplete ---------- */
+  .combo{position:relative}
+  .combo .menu{position:absolute;z-index:60;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--line2);border-radius:9px;box-shadow:var(--shadow-l);max-height:330px;overflow-y:auto;display:none}
+  .combo .menu.on{display:block}
+  .combo .opt{padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .combo .opt:last-child{border-bottom:0}
+  .combo .opt:hover,.combo .opt.hi{background:#eef3ff}
+  .combo .opt .t{font-weight:600;font-size:12.5px}
+  .combo .opt .s{font-size:11px;color:var(--ink2);margin-top:1px;font-family:var(--mono)}
+  .combo .opt .tag{float:right;font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--ink2);background:var(--chip);border-radius:20px;padding:1px 7px;margin-left:8px}
+  .combo .opt .tag.reg{background:#e8eeff;color:var(--acc-d)}
+  .combo .opt .tag.bad{background:var(--bad-bg);color:var(--bad)}
+  .combo .head-opt{padding:6px 11px;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink2);background:#f6f7fa;font-weight:700;border-bottom:1px solid var(--line)}
+
+  /* ---------- editor ---------- */
+  .ed-top{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px}
+  @media(max-width:900px){.ed-top{grid-template-columns:minmax(0,1fr)}}
+  .party{border:1px solid var(--line);border-radius:10px;padding:12px 13px;background:#fbfcfe}
+  .party .pn{font-weight:650;font-size:13.5px}
+  .party .pd{color:var(--ink2);font-size:12px;line-height:1.65;margin-top:3px;white-space:pre-wrap}
+  .totals-box{margin-left:auto;width:min(360px,100%)}
+  .totals-box .tr{display:flex;justify-content:space-between;gap:14px;padding:7px 2px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .totals-box .tr .tl{color:var(--ink2)}
+  .totals-box .tr .tv{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
+  .totals-box .grand{margin-top:9px;background:var(--ink);color:#fff;border-radius:10px;padding:12px 15px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .totals-box .grand .tl{color:#c9d4ff;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .totals-box .grand .tv{font-size:20px;font-weight:750;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .actionbar{position:sticky;bottom:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);margin:0 -16px -90px;padding:11px 16px;display:flex;gap:9px;flex-wrap:wrap;align-items:center;box-shadow:0 -2px 14px rgba(20,24,33,.06)}
+
+  /* ---------- modal ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(16,20,28,.42);z-index:90;display:none;align-items:center;justify-content:center;padding:18px}
+  .scrim.on{display:flex}
+  .modal{background:#fff;border-radius:14px;box-shadow:var(--shadow-l);width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+  .modal.wide{width:min(980px,100%)}
+  .modal .mh{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
+  .modal .mh h2{font-size:15px}
+  .modal .mb{padding:16px;overflow-y:auto;flex:1}
+  .modal .mf{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;background:#fbfcfe}
+
+  /* ---------- progress ---------- */
+  .prog{height:7px;background:var(--chip);border-radius:20px;overflow:hidden;margin-top:8px}
+  .prog i{display:block;height:100%;background:var(--acc);width:0;transition:width .18s ease}
+
+  /* ---------- toast ---------- */
+  .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,26px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;box-shadow:var(--shadow-l);opacity:0;pointer-events:none;transition:.22s;z-index:200;max-width:min(560px,92vw);text-align:center}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .toast.bad{background:var(--bad)}
+
+  @media(max-width:640px){
+    /* header must stay ONE row: wrapping buttons used to land on top of the
+       brand. Backup/Restore are dropped here because Settings > Data has both. */
+    .hwrap{gap:8px;padding:8px 11px;flex-wrap:nowrap}
+    .brand{flex:1;min-width:0}
+    .brand>div{min-width:0}
+    .brand h1{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .brand .sub{display:none}
+    .hbtns{flex-wrap:nowrap;gap:4px;flex:none}
+    #btnExport,#btnImport{display:none}
+    #btnNewTop{padding:6px 10px;font-size:14px;font-weight:700}
+    #btnNewTop span{display:none}
+    .lang button{padding:5px 7px;font-size:11px}
+    main{padding:14px 11px 90px}
+    /* one swipeable row instead of three stacked rows of buttons */
+    .actionbar{margin:0 -11px -90px;padding:10px 11px;flex-wrap:nowrap;overflow-x:auto;
+               scrollbar-width:none;gap:7px}
+    .actionbar::-webkit-scrollbar{display:none}
+    .actionbar .grow{display:none}
+    .actionbar .btn{flex:none}
+    .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+    .kpi .kv{font-size:19px}
+    .card>.head{gap:8px}
+    /* invoice lines stack into one card per line - a phone cannot usefully
+       scroll a 8-column table sideways while typing into it */
+    #linesTbl,#linesTbl tbody{display:block}
+    #linesTbl thead{display:none}
+    #linesTbl tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;
+      border:1px solid var(--line);border-radius:10px;padding:11px;margin:0 0 10px;background:#fff}
+    #linesTbl td{display:block;border:0;padding:0;white-space:normal;width:auto!important;min-width:0}
+    #linesTbl td::before{content:attr(data-lab);display:block;font-size:9.5px;text-transform:uppercase;
+      letter-spacing:.06em;color:var(--ink2);font-weight:700;margin-bottom:3px}
+    #linesTbl td[data-c=name]{grid-column:1/-1}
+    #linesTbl td[data-c=sum]{grid-column:1/4;text-align:right;align-self:end;font-size:15px;font-weight:700}
+    #linesTbl td[data-c=del]{grid-column:4;text-align:right;align-self:end}
+    #linesTbl td[data-c=del]::before{content:'';margin:0}
+    #linesTbl td input{width:100%}
+    #linesTbl td input[type=number]{min-width:0}
+    .card>.body.tight .tblwrap{padding:11px 11px 1px}
+    .modal{max-height:92vh;width:100%}
+    .modal .mf{flex-direction:column-reverse}
+    .modal .mf .btn{width:100%;justify-content:center}
+  }
+  @media print{header,nav.tabs,.actionbar,.hbtns{display:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hwrap">
+    <div class="brand">
+      <span class="logo">SF</span>
+      <div><h1 id="brandTitle">Sąskaitos faktūros</h1><div class="sub" id="brandSub">invoicing · 2026</div></div>
+    </div>
+    <div class="hspace"></div>
+    <div class="hbtns">
+      <button id="btnNewTop" class="go">＋ <span data-i18n="newInvoice">Nauja sąskaita</span></button>
+      <button id="btnExport" data-i18n="backup">Atsarginė kopija</button>
+      <button id="btnImport" data-i18n="restore">Atkurti</button>
+      <span class="lang"><button id="lang-lt">LT</button><button id="lang-en">EN</button></span>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs"><div class="twrap" id="tabbar"></div></nav>
+
+<main>
+  <section class="panel" id="p-dash"></section>
+  <section class="panel" id="p-invoices"></section>
+  <section class="panel" id="p-editor"></section>
+  <section class="panel" id="p-customers"></section>
+  <section class="panel" id="p-items"></section>
+  <section class="panel" id="p-settings"></section>
+</main>
+
+<div class="scrim" id="scrim"><div class="modal" id="modal">
+  <div class="mh"><h2 id="modalTitle"></h2><div class="hspace" style="flex:1"></div><button class="icon-btn" id="modalX">✕</button></div>
+  <div class="mb" id="modalBody"></div>
+  <div class="mf" id="modalFoot"></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fileIn" accept=".json,application/json" style="display:none">
+
+<script>
+/* =========================================================================
+   Sąskaitos faktūros — single-file invoicing app.
+   Same shell conventions as the other CraftOS apps (offer / shopflow):
+   sticky dark header, sticky tab strip, cards, localStorage state, LT/EN.
+   ========================================================================= */
+
+/* ===================== i18n ===================== */
+const I18N={
+ lt:{
+  appTitle:"Sąskaitos faktūros",appSub:"sąskaitų išrašymas · 2026",
+  newInvoice:"Nauja sąskaita",backup:"Atsarginė kopija",restore:"Atkurti",
+  tabDash:"Apžvalga",tabInvoices:"Sąskaitos",tabEditor:"Sąskaita",tabCustomers:"Pirkėjai",tabItems:"Prekės ir paslaugos",tabSettings:"Nustatymai",
+
+  /* dashboard */
+  kpiUnpaid:"Neapmokėta",kpiOverdue:"Pradelsta",kpiMonth:"Šio mėn. pajamos",kpiVat:"Šio mėn. PVM",
+  kpiUnpaidSub:"sąskaitų:",kpiOverdueSub:"vėluoja dienų (vid.):",kpiMonthSub:"be PVM:",kpiVatSub:"mokėtinas PVM",
+  dashStart:"Pradėkite",dashStartSub:"Sukurkite pirmą sąskaitą — pirkėją rasite Lietuvos įmonių registre, likusi dalis užsipildys pati.",
+  dashSetup:"Pirmiausia užpildykite savo įmonės duomenis",dashSetupSub:"Pardavėjo rekvizitai spausdinami ant kiekvienos sąskaitos.",
+  dashGoSettings:"Atidaryti nustatymus",
+  dashOverdue:"Pradelstos sąskaitos",dashRecent:"Paskutinės sąskaitos",dashNoOverdue:"Pradelstų sąskaitų nėra. Puiku.",
+  dashYear:"Metų apyvarta",dashMonthly:"Pagal mėnesį",
+
+  /* invoice list */
+  invSearch:"Ieškoti pagal numerį, pirkėją, sumą…",
+  invAll:"Visos",invDraft:"Juodraščiai",invSent:"Išsiųstos",invPaid:"Apmokėtos",invOverdue:"Pradelstos",
+  colNo:"Nr.",colDate:"Data",colCustomer:"Pirkėjas",colDue:"Terminas",colTotal:"Viso su PVM",colPaid:"Apmokėta",colStatus:"Būsena",colAct:"",
+  noInvoices:"Sąskaitų dar nėra.",noInvoicesSub:"Paspauskite „Nauja sąskaita“ ir pradėkite.",
+  stDraft:"Juodraštis",stSent:"Išsiųsta",stPaid:"Apmokėta",stPart:"Dalinai",stOver:"Pradelsta",
+  filterYear:"Metai",allYears:"Visi metai",
+  exportCsv:"Eksportuoti CSV",exportSel:"Eksportuoti pažymėtas",
+
+  /* editor */
+  edNew:"Nauja sąskaita",edEdit:"Sąskaita",
+  edType:"Dokumento tipas",typeInvoice:"PVM sąskaita faktūra",typeSimple:"Sąskaita faktūra",typeProforma:"Išankstinė sąskaita",typeCredit:"Kreditinė sąskaita",
+  edSeries:"Serija",edNumber:"Numeris",edDate:"Išrašymo data",edDue:"Apmokėti iki",edTerm:"Terminas (d.)",
+  edSeller:"Pardavėjas",edBuyer:"Pirkėjas",edPickBuyer:"Pirkėjas — pradėkite rašyti pavadinimą arba įmonės kodą",
+  edChange:"Keisti",edEditBuyer:"Redaguoti",
+  edLines:"Prekės ir paslaugos",edAddLine:"＋ Eilutė",edAddFromCat:"Iš katalogo",
+  lnName:"Pavadinimas",lnQty:"Kiekis",lnUnit:"Mato vnt.",lnPrice:"Kaina",lnDisc:"Nuol. %",lnVat:"PVM %",lnSum:"Suma",
+  edSubtotal:"Suma be PVM",edDiscount:"Nuolaida",edVat:"PVM",edTotal:"Viso mokėti",edAdvance:"Avansas",edDueNow:"Liko mokėti",
+  edNotes:"Pastabos sąskaitoje",edNotesPh:"Pvz. mokėjimo paskirtis, sutarties nr., „Atvirkštinis apmokestinimas“…",
+  edSave:"Išsaugoti",edPdf:"PDF / spausdinti",edMail:"Siųsti el. paštu",edCopy:"Kopijuoti",edDelete:"Ištrinti",edPayments:"Mokėjimai",edMarkPaid:"Pažymėti apmokėta",edBack:"← Sąskaitų sąrašas",edXml:"e-sąskaita (XML)",
+  edNoBuyer:"Pasirinkite pirkėją",edNoLines:"Pridėkite bent vieną eilutę",
+  edIssuer:"Sąskaitą išrašė",edReceiver:"Sąskaitą gavo",
+  edCurrency:"Valiuta",
+
+  /* payments */
+  payTitle:"Mokėjimai",payAdd:"Registruoti mokėjimą",payDate:"Data",payAmount:"Suma",payNote:"Pastaba",payNone:"Mokėjimų nėra.",payRest:"Liko:",
+
+  /* customers */
+  custAdd:"＋ Naujas pirkėjas",custSearch:"Ieškoti pirkėjo…",
+  custName:"Pavadinimas",custKind:"Tipas",kindCompany:"Įmonė",kindPerson:"Fizinis asmuo",
+  custCode:"Įmonės kodas",custVat:"PVM mokėtojo kodas",custAddr:"Adresas",custEmail:"El. paštas",custPhone:"Telefonas",custContact:"Kontaktinis asmuo",custTerm:"Mokėjimo terminas (d.)",custNote:"Pastaba",
+  custNone:"Pirkėjų dar nėra.",custNoneSub:"Pridėkite rankiniu būdu arba raskite Lietuvos įmonių registre.",
+  custInvoices:"Sąskaitų:",custTurnover:"Apyvarta:",
+  custDelConfirm:"Ištrinti šį pirkėją?",
+  regFind:"Rasti registre",regTitle:"Lietuvos juridinių asmenų registras",
+  regPh:"Įmonės pavadinimas arba kodas…",
+  regHint:"Duomenys iš Registrų centro (JAR) ir VMI mokesčių mokėtojų registro. Veikia be interneto, kai kartą įkeliama.",
+  regLoad:"Įkelti registrą",regLoading:"Kraunama…",regLoaded:"Registras įkeltas",
+  regSize:"vienkartinis atsiuntimas",regCompanies:"įmonių",regWithVat:"su PVM kodu",
+  regNoRes:"Nieko nerasta.",regTypeMore:"Įveskite bent 3 simbolius.",
+  regUnavail:"Registro failo nepavyko įkelti. Pirkėją galite įvesti rankiniu būdu.",
+  regFlagged:"Registre pažymėta:",
+  savedCustomers:"Išsaugoti pirkėjai",registryResults:"Įmonių registras",
+  useManual:"Įvesti rankiniu būdu",
+
+  /* items */
+  itemAdd:"＋ Nauja prekė / paslauga",itemName:"Pavadinimas",itemUnit:"Mato vnt.",itemPrice:"Kaina be PVM",itemVat:"PVM %",itemCode:"Kodas",
+  itemNone:"Katalogas tuščias.",itemNoneSub:"Pridėkite dažniausiai naudojamas prekes ir paslaugas — jas įkelsite į sąskaitą vienu paspaudimu.",
+  itemUsed:"Panaudota kartų:",
+
+  /* settings */
+  setSeller:"Mano įmonė (pardavėjas)",setSellerSub:"Šie duomenys spausdinami ant kiekvienos sąskaitos.",
+  setName:"Pavadinimas",setCode:"Įmonės kodas",setVat:"PVM mokėtojo kodas",setAddr:"Adresas",setEmail:"El. paštas",setPhone:"Telefonas",setWeb:"Svetainė",setDirector:"Vadovas / išrašė",
+  setLogo:"Logotipas",setLogoUp:"Įkelti logotipą",setLogoDel:"Pašalinti",
+  setBanks:"Banko sąskaitos",setBankAdd:"＋ Pridėti sąskaitą",setBankName:"Bankas",setIban:"IBAN",setSwift:"SWIFT / BIC",
+  setNumbering:"Numeracija ir nutylėtieji",
+  setSeries:"Serija",setNext:"Kitas numeris",setFormat:"Numerio formatas",
+  setFormatHint:"Galimi žymenys: {S} serija, {YYYY} metai, {YY}, {MM} mėnuo, {N} numeris, {NNNN} numeris su nuliais.",
+  setVatRate:"Standartinis PVM tarifas %",setTerm:"Mokėjimo terminas (d.)",setCurrency:"Valiuta",setUnit:"Numatytas mato vnt.",
+  setNote:"Numatytos pastabos",setFooter:"Poraštės tekstas",
+  setVatPayer:"Esu PVM mokėtojas",setVatPayerHint:"Jei nesate PVM mokėtojas, dokumentas vadinasi „Sąskaita faktūra“ ir PVM neskaičiuojamas.",
+  setShowDisc:"Rodyti nuolaidų stulpelį",setShowWords:"Rašyti sumą žodžiais",setShowSign:"Rodyti parašų eilutes",
+  setData:"Duomenys",setDataSub:"Visi duomenys saugomi tik šioje naršyklėje. Reguliariai darykite atsarginę kopiją.",
+  setExport:"⤓ Atsisiųsti atsarginę kopiją (JSON)",setImport:"⤒ Atkurti iš failo",setWipe:"Išvalyti viską",
+  setWipeConfirm:"Ištrinti VISUS duomenis? Šio veiksmo atšaukti negalima.",
+  setRegistry:"Įmonių registras",
+  setSaved:"Išsaugota",
+
+  /* pdf */
+  pdfInvoice:"PVM SĄSKAITA FAKTŪRA",pdfSimple:"SĄSKAITA FAKTŪRA",pdfProforma:"IŠANKSTINĖ SĄSKAITA",pdfCredit:"KREDITINĖ SĄSKAITA",
+  pdfSeriesNo:"Serija ir Nr.",pdfDate:"Išrašymo data",pdfDue:"Apmokėti iki",
+  pdfSeller:"Pardavėjas",pdfBuyer:"Pirkėjas",
+  pdfCode:"Į. k.",pdfVat:"PVM k.",pdfBank:"A/s",
+  pdfNo:"Nr.",pdfItem:"Pavadinimas",pdfQty:"Kiekis",pdfUnit:"Mato vnt.",pdfPrice:"Kaina",pdfDisc:"Nuolaida",pdfVatRate:"PVM %",pdfSum:"Suma",
+  pdfSubtotal:"Suma be PVM",pdfVatSum:"PVM suma",pdfTotal:"Viso mokėti",
+  pdfWords:"Suma žodžiais",pdfNotes:"Pastabos",
+  pdfIssued:"Sąskaitą išrašė",pdfReceived:"Sąskaitą gavo",
+  pdfPrintSave:"🖨 Spausdinti / išsaugoti PDF",
+  pdfPaid:"Apmokėta",pdfDueNow:"Liko mokėti",
+
+  /* misc */
+  saved:"Išsaugota",deleted:"Ištrinta",copied:"Nukopijuota",
+  cancel:"Atšaukti",save:"Išsaugoti",add:"Pridėti",del:"Ištrinti",close:"Uždaryti",yes:"Taip",
+  confirmDel:"Ar tikrai ištrinti?",
+  popupBlocked:"Leiskite iškylančiuosius langus, kad galėtumėte spausdinti.",
+  importOk:"Duomenys atkurti",importBad:"Netinkamas failas",
+  nothingSelected:"Nieko nepažymėta",
+  pcs:"vnt", hours:"val", sqm:"m²", pcsUnit:"vnt",
+  eur:"EUR",
+  needSellerName:"Nustatymuose įveskite savo įmonės pavadinimą.",
+  copyOf:"kopija"
+ },
+ en:{
+  appTitle:"Invoices",appSub:"invoicing · 2026",
+  newInvoice:"New invoice",backup:"Backup",restore:"Restore",
+  tabDash:"Overview",tabInvoices:"Invoices",tabEditor:"Invoice",tabCustomers:"Customers",tabItems:"Products & services",tabSettings:"Settings",
+
+  kpiUnpaid:"Outstanding",kpiOverdue:"Overdue",kpiMonth:"This month",kpiVat:"VAT this month",
+  kpiUnpaidSub:"invoices:",kpiOverdueSub:"avg. days late:",kpiMonthSub:"excl. VAT:",kpiVatSub:"VAT payable",
+  dashStart:"Get started",dashStartSub:"Create your first invoice — pick the buyer from the Lithuanian company registry and the rest fills itself in.",
+  dashSetup:"First, fill in your company details",dashSetupSub:"Seller details are printed on every invoice.",
+  dashGoSettings:"Open settings",
+  dashOverdue:"Overdue invoices",dashRecent:"Latest invoices",dashNoOverdue:"Nothing overdue. Nice.",
+  dashYear:"Turnover this year",dashMonthly:"By month",
+
+  invSearch:"Search by number, buyer, amount…",
+  invAll:"All",invDraft:"Drafts",invSent:"Sent",invPaid:"Paid",invOverdue:"Overdue",
+  colNo:"No.",colDate:"Date",colCustomer:"Buyer",colDue:"Due",colTotal:"Total incl. VAT",colPaid:"Paid",colStatus:"Status",colAct:"",
+  noInvoices:"No invoices yet.",noInvoicesSub:"Hit “New invoice” to start.",
+  stDraft:"Draft",stSent:"Sent",stPaid:"Paid",stPart:"Partial",stOver:"Overdue",
+  filterYear:"Year",allYears:"All years",
+  exportCsv:"Export CSV",exportSel:"Export selected",
+
+  edNew:"New invoice",edEdit:"Invoice",
+  edType:"Document type",typeInvoice:"VAT invoice",typeSimple:"Invoice",typeProforma:"Proforma invoice",typeCredit:"Credit note",
+  edSeries:"Series",edNumber:"Number",edDate:"Issue date",edDue:"Due date",edTerm:"Terms (days)",
+  edSeller:"Seller",edBuyer:"Buyer",edPickBuyer:"Buyer — start typing a name or company code",
+  edChange:"Change",edEditBuyer:"Edit",
+  edLines:"Products & services",edAddLine:"＋ Line",edAddFromCat:"From catalogue",
+  lnName:"Description",lnQty:"Qty",lnUnit:"Unit",lnPrice:"Price",lnDisc:"Disc. %",lnVat:"VAT %",lnSum:"Amount",
+  edSubtotal:"Subtotal excl. VAT",edDiscount:"Discount",edVat:"VAT",edTotal:"Total due",edAdvance:"Advance",edDueNow:"Balance due",
+  edNotes:"Notes on the invoice",edNotesPh:"e.g. payment reference, contract no., “Reverse charge”…",
+  edSave:"Save",edPdf:"PDF / print",edMail:"Send by e-mail",edCopy:"Duplicate",edDelete:"Delete",
+  edPayments:"Payments",edMarkPaid:"Mark as paid",edBack:"← Invoice list",edXml:"e-invoice (XML)",
+  edNoBuyer:"Pick a buyer",edNoLines:"Add at least one line",
+  edIssuer:"Issued by",edReceiver:"Received by",
+  edCurrency:"Currency",
+
+  payTitle:"Payments",payAdd:"Record payment",payDate:"Date",payAmount:"Amount",payNote:"Note",payNone:"No payments yet.",payRest:"Remaining:",
+
+  custAdd:"＋ New customer",custSearch:"Search customers…",
+  custName:"Name",custKind:"Type",kindCompany:"Company",kindPerson:"Private person",
+  custCode:"Company code",custVat:"VAT number",custAddr:"Address",custEmail:"E-mail",custPhone:"Phone",custContact:"Contact person",custTerm:"Payment terms (days)",custNote:"Note",
+  custNone:"No customers yet.",custNoneSub:"Add one manually or find it in the Lithuanian company registry.",
+  custInvoices:"Invoices:",custTurnover:"Turnover:",
+  custDelConfirm:"Delete this customer?",
+  regFind:"Find in registry",regTitle:"Lithuanian company registry",
+  regPh:"Company name or code…",
+  regHint:"Data from Registrų centras (JAR) and the VMI taxpayer register. Works offline once loaded.",
+  regLoad:"Load registry",regLoading:"Loading…",regLoaded:"Registry loaded",
+  regSize:"one-time download",regCompanies:"companies",regWithVat:"with VAT number",
+  regNoRes:"Nothing found.",regTypeMore:"Type at least 3 characters.",
+  regUnavail:"Could not load the registry file. You can still enter the buyer manually.",
+  regFlagged:"Registry flag:",
+  savedCustomers:"Saved customers",registryResults:"Company registry",
+  useManual:"Enter manually",
+
+  itemAdd:"＋ New product / service",itemName:"Name",itemUnit:"Unit",itemPrice:"Price excl. VAT",itemVat:"VAT %",itemCode:"Code",
+  itemNone:"Catalogue is empty.",itemNoneSub:"Add the things you sell most often — then drop them into an invoice with one click.",
+  itemUsed:"Used:",
+
+  setSeller:"My company (seller)",setSellerSub:"These details are printed on every invoice.",
+  setName:"Name",setCode:"Company code",setVat:"VAT number",setAddr:"Address",setEmail:"E-mail",setPhone:"Phone",setWeb:"Website",setDirector:"Director / issued by",
+  setLogo:"Logo",setLogoUp:"Upload logo",setLogoDel:"Remove",
+  setBanks:"Bank accounts",setBankAdd:"＋ Add account",setBankName:"Bank",setIban:"IBAN",setSwift:"SWIFT / BIC",
+  setNumbering:"Numbering and defaults",
+  setSeries:"Series",setNext:"Next number",setFormat:"Number format",
+  setFormatHint:"Tokens: {S} series, {YYYY} year, {YY}, {MM} month, {N} number, {NNNN} zero-padded number.",
+  setVatRate:"Standard VAT rate %",setTerm:"Payment terms (days)",setCurrency:"Currency",setUnit:"Default unit",
+  setNote:"Default notes",setFooter:"Footer text",
+  setVatPayer:"I am VAT registered",setVatPayerHint:"If you are not VAT registered the document is titled “Invoice” and no VAT is calculated.",
+  setShowDisc:"Show discount column",setShowWords:"Write the amount in words",setShowSign:"Show signature lines",
+  setData:"Data",setDataSub:"Everything is stored in this browser only. Take a backup regularly.",
+  setExport:"⤓ Download backup (JSON)",setImport:"⤒ Restore from file",setWipe:"Erase everything",
+  setWipeConfirm:"Delete ALL data? This cannot be undone.",
+  setRegistry:"Company registry",
+  setSaved:"Saved",
+
+  pdfInvoice:"VAT INVOICE",pdfSimple:"INVOICE",pdfProforma:"PROFORMA INVOICE",pdfCredit:"CREDIT NOTE",
+  pdfSeriesNo:"Series and No.",pdfDate:"Issue date",pdfDue:"Due date",
+  pdfSeller:"Seller",pdfBuyer:"Buyer",
+  pdfCode:"Reg. no.",pdfVat:"VAT no.",pdfBank:"IBAN",
+  pdfNo:"No.",pdfItem:"Description",pdfQty:"Qty",pdfUnit:"Unit",pdfPrice:"Price",pdfDisc:"Discount",pdfVatRate:"VAT %",pdfSum:"Amount",
+  pdfSubtotal:"Subtotal excl. VAT",pdfVatSum:"VAT",pdfTotal:"Total due",
+  pdfWords:"Amount in words",pdfNotes:"Notes",
+  pdfIssued:"Issued by",pdfReceived:"Received by",
+  pdfPrintSave:"🖨 Print / save as PDF",
+  pdfPaid:"Paid",pdfDueNow:"Balance due",
+
+  saved:"Saved",deleted:"Deleted",copied:"Copied",
+  cancel:"Cancel",save:"Save",add:"Add",del:"Delete",close:"Close",yes:"Yes",
+  confirmDel:"Delete this?",
+  popupBlocked:"Please allow pop-ups so the invoice can be printed.",
+  importOk:"Data restored",importBad:"Not a valid backup file",
+  nothingSelected:"Nothing selected",
+  pcs:"pcs",hours:"h",sqm:"m²",pcsUnit:"pcs",
+  eur:"EUR",
+  needSellerName:"Enter your company name in Settings.",
+  copyOf:"copy"
+ }
+};
+const LANGS=['lt','en'];
+let LANG='lt';
+const t=k=>{const d=I18N[LANG];if(d&&d[k]!==undefined)return d[k];if(I18N.en[k]!==undefined)return I18N.en[k];return I18N.lt[k]||k;};
+</script>
+
+<script>
+/* ===================== state ===================== */
+const KEY='inv_state_v1', LANG_KEY='fab_lang'; /* same lang key the sibling apps use */
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+
+function blankState(){
+  return {
+    v:1,
+    seller:{name:"",code:"",vat:"",address:"",email:"",phone:"",web:"",director:"",logo:"",
+            banks:[{bank:"",iban:"",swift:""}]},
+    settings:{series:"SF",next:1,format:"{S}-{YYYY}-{NNNN}",vatRate:21,vatPayer:true,
+              currency:"EUR",term:14,unit:"vnt",note:"",footer:"",
+              showDisc:false,showWords:true,showSign:true},
+    customers:[],items:[],invoices:[]
+  };
+}
+let S=blankState();
+let VIEW='dash';            /* active tab */
+let EDIT=null;              /* invoice object currently open in the editor */
+let saveTimer=null;
+
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(raw){
+      const p=JSON.parse(raw);
+      S=Object.assign(blankState(),p);
+      S.seller=Object.assign(blankState().seller,p.seller||{});
+      S.settings=Object.assign(blankState().settings,p.settings||{});
+      if(!Array.isArray(S.seller.banks)||!S.seller.banks.length)S.seller.banks=[{bank:"",iban:"",swift:""}];
+      S.customers=p.customers||[];S.items=p.items||[];S.invoices=p.invoices||[];
+    }
+  }catch(e){console.warn('load failed',e);}
+}
+function saveNow(){
+  try{localStorage.setItem(KEY,JSON.stringify(S));}
+  catch(e){toast('localStorage full — export a backup and remove the logo image',true);}
+}
+function save(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,250);}
+
+/* ===================== tiny helpers ===================== */
+const $=s=>document.querySelector(s);
+const $$=s=>Array.from(document.querySelectorAll(s));
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=v=>{const n=parseFloat(String(v==null?'':v).replace(',','.'));return isFinite(n)?n:0;};
+const r2=n=>Math.round((n+Number.EPSILON)*100)/100;
+
+function toast(msg,bad){
+  const el=$('#toast');el.textContent=msg;el.classList.toggle('bad',!!bad);el.classList.add('on');
+  clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('on'),2600);
+}
+function money(n){
+  return new Intl.NumberFormat(LANG==='lt'?'lt-LT':'en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}).format(r2(n||0));
+}
+function cur(){return S.settings.currency||'EUR';}
+function eurStr(n){return money(n)+' '+cur();}
+const today=()=>new Date().toISOString().slice(0,10);
+/* Dates are handled in UTC end to end: a local-midnight Date sent through
+   toISOString() rolls back a day in every UTC+ zone, Vilnius included. */
+function addDays(iso,d){const x=new Date(iso+'T00:00:00Z');x.setUTCDate(x.getUTCDate()+(d|0));return x.toISOString().slice(0,10);}
+function fmtDate(iso){
+  if(!iso)return '';
+  return LANG==='lt'?iso:new Date(iso+'T00:00:00Z').toLocaleDateString('en-GB',{timeZone:'UTC'});
+}
+function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/864e5);}
+
+/* Lithuanian diacritics -> ASCII, length preserving, for search + file names. */
+const DIA={'ą':'a','č':'c','ę':'e','ė':'e','į':'i','š':'s','ų':'u','ū':'u','ž':'z'};
+const deacc=s=>s.replace(/[ąčęėįšųūž]/g,c=>DIA[c]);
+const normQ=s=>deacc(String(s||'').toLowerCase());
+function slug(s){return deacc(String(s||'').toLowerCase()).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'file';}
+
+/* ===================== amount in words ===================== */
+const LT_ONES=['','vienas','du','trys','keturi','penki','šeši','septyni','aštuoni','devyni','dešimt',
+  'vienuolika','dvylika','trylika','keturiolika','penkiolika','šešiolika','septyniolika','aštuoniolika','devyniolika'];
+const LT_TENS=['','','dvidešimt','trisdešimt','keturiasdešimt','penkiasdešimt','šešiasdešimt','septyniasdešimt','aštuoniasdešimt','devyniasdešimt'];
+/* forms = [singular, plural, genitive] — Lithuanian picks by the last one/two digits */
+function ltForm(n,forms){
+  const t2=n%100,u=n%10;
+  if(t2>=11&&t2<=19)return forms[2];
+  if(u===1)return forms[0];
+  if(u===0)return forms[2];
+  return forms[1];
+}
+function lt3(n){
+  const out=[],h=Math.floor(n/100),r=n%100;
+  if(h)out.push(h===1?'šimtas':LT_ONES[h]+' šimtai');
+  if(r<20){if(r)out.push(LT_ONES[r]);}
+  else{out.push(LT_TENS[Math.floor(r/10)]);if(r%10)out.push(LT_ONES[r%10]);}
+  return out.join(' ');
+}
+function ltNum(n){
+  n=Math.floor(Math.abs(n));
+  if(n===0)return 'nulis';
+  const groups=[[1e9,['milijardas','milijardai','milijardų']],
+                [1e6,['milijonas','milijonai','milijonų']],
+                [1e3,['tūkstantis','tūkstančiai','tūkstančių']]];
+  const parts=[];let rest=n;
+  for(const [div,forms] of groups){
+    const q=Math.floor(rest/div);
+    if(q){parts.push((q===1?'':lt3(q)+' ')+ltForm(q,forms));rest%=div;}
+  }
+  if(rest)parts.push(lt3(rest));
+  return parts.join(' ');
+}
+const EN_ONES=['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve',
+  'thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+const EN_TENS=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+function en3(n){
+  const out=[],h=Math.floor(n/100),r=n%100;
+  if(h)out.push(EN_ONES[h]+' hundred');
+  if(r){
+    if(out.length)out.push('and');
+    if(r<20)out.push(EN_ONES[r]);
+    else{out.push(EN_TENS[Math.floor(r/10)]+(r%10?'-'+EN_ONES[r%10]:''));}
+  }
+  return out.join(' ');
+}
+function enNum(n){
+  n=Math.floor(Math.abs(n));
+  if(n===0)return 'zero';
+  const groups=[[1e9,'billion'],[1e6,'million'],[1e3,'thousand']],parts=[];
+  let rest=n;
+  for(const [div,word] of groups){
+    const q=Math.floor(rest/div);
+    if(q){parts.push(en3(q)+' '+word);rest%=div;}
+  }
+  if(rest)parts.push(en3(rest));
+  return parts.join(' ');
+}
+/* "Vienas tūkstantis du šimtai eurų 50 ct" */
+function amountWords(v){
+  const whole=Math.floor(r2(v)),cents=Math.round((r2(v)-whole)*100);
+  const cc=String(cents).padStart(2,'0');
+  if(LANG==='lt'){
+    const w=ltNum(whole);
+    return w.charAt(0).toUpperCase()+w.slice(1)+' '+ltForm(whole,['euras','eurai','eurų'])+' '+cc+' ct';
+  }
+  const w=enNum(whole);
+  return w.charAt(0).toUpperCase()+w.slice(1)+' '+(whole===1?'euro':'euros')+' '+cc+' cents';
+}
+
+/* ===================== invoice maths ===================== */
+/* One place computes every total. Line: qty * price, minus discount %, then VAT. */
+function lineNet(l){return r2(num(l.qty)*num(l.price)*(1-num(l.disc)/100));}
+function lineGross(l){return r2(l.qty*0+lineNet(l)*(1+num(l.vat)/100));}
+function calc(inv){
+  const lines=inv.lines||[];
+  let gross=0,net=0,disc=0;
+  const byVat={};
+  lines.forEach(l=>{
+    const raw=r2(num(l.qty)*num(l.price));
+    const n=lineNet(l);
+    gross+=raw;disc+=raw-n;net+=n;
+    const rate=num(l.vat);
+    byVat[rate]=(byVat[rate]||0)+n;
+  });
+  net=r2(net);disc=r2(disc);gross=r2(gross);
+  let vat=0;
+  const vatRows=Object.keys(byVat).map(Number).sort((a,b)=>a-b).map(rate=>{
+    const base=r2(byVat[rate]),amt=r2(base*rate/100);
+    vat+=amt;return {rate,base,amt};
+  });
+  vat=r2(vat);
+  const total=r2(net+vat);
+  const paid=r2((inv.payments||[]).reduce((s,p)=>s+num(p.amount),0));
+  return {gross,disc,net,vat,vatRows,total,paid,due:r2(total-paid)};
+}
+function invStatus(inv){
+  const c=calc(inv);
+  if(inv.status==='draft')return 'draft';
+  if(c.due<=0.005&&c.total>0)return 'paid';
+  if(c.paid>0.005)return 'part';
+  if(inv.dueDate&&inv.dueDate<today())return 'over';
+  return 'sent';
+}
+const STATUS_LABEL={draft:'stDraft',sent:'stSent',paid:'stPaid',part:'stPart',over:'stOver'};
+
+/* ===================== numbering ===================== */
+function makeNumber(seq){
+  const s=S.settings,d=new Date();
+  const n=seq==null?s.next:seq;
+  return String(s.format||'{S}-{YYYY}-{NNNN}')
+    .replace(/\{S\}/g,s.series||'')
+    .replace(/\{YYYY\}/g,String(d.getFullYear()))
+    .replace(/\{YY\}/g,String(d.getFullYear()).slice(2))
+    .replace(/\{MM\}/g,String(d.getMonth()+1).padStart(2,'0'))
+    .replace(/\{NNNNN\}/g,String(n).padStart(5,'0'))
+    .replace(/\{NNNN\}/g,String(n).padStart(4,'0'))
+    .replace(/\{NNN\}/g,String(n).padStart(3,'0'))
+    .replace(/\{N\}/g,String(n));
+}
+</script>
+
+<script>
+/* =========================================================================
+   Lithuanian company registry — offline search over 230k+ legal entities.
+
+   data/lt-registry.txt.gz is one company per line:
+       code \t name \t address \t vat \t form \t status
+   It is fetched once (~6.4 MB), kept in the Cache API so it also works
+   offline, inflated with DecompressionStream and then searched as raw text:
+   we keep a diacritic-folded copy of the whole blob plus newline offsets for
+   both copies, so a match position maps straight back to its line without
+   ever building 230k JS objects.
+   ========================================================================= */
+const REG={
+  url:'data/lt-registry.txt.gz',
+  state:'idle',          /* idle | loading | ready | error */
+  text:'', norm:'', offT:null, offN:null, lines:0, meta:null,
+  _p:null,
+
+  cacheName:'inv-registry-v1',
+
+  async cached(){
+    if(!('caches' in window))return null;
+    try{const c=await caches.open(this.cacheName);return await c.match(this.url);}catch(e){return null;}
+  },
+  /* Load only if it is already downloaded — called on boot so a returning
+     user gets instant, offline search without a surprise 6 MB fetch. */
+  async loadIfCached(){
+    const hit=await this.cached();
+    if(hit)return this.load();
+    return false;
+  },
+  load(onProgress){
+    if(this.state==='ready')return Promise.resolve(true);
+    if(this._p)return this._p;
+    this.state='loading';
+    this._p=(async()=>{
+      try{
+        let res=await this.cached();
+        if(!res){
+          res=await fetch(this.url);
+          if(!res.ok)throw new Error('HTTP '+res.status);
+          if('caches' in window){
+            try{const c=await caches.open(this.cacheName);await c.put(this.url,res.clone());}catch(e){}
+          }
+        }
+        const total=Number(res.headers.get('content-length'))||6500000;
+        let buf;
+        if(res.body&&onProgress){
+          const reader=res.body.getReader();const chunks=[];let got=0;
+          for(;;){
+            const {done,value}=await reader.read();
+            if(done)break;
+            chunks.push(value);got+=value.length;
+            onProgress(Math.min(.92,got/total));
+          }
+          buf=new Blob(chunks);
+        }else{
+          buf=await res.blob();
+        }
+        onProgress&&onProgress(.94);
+        let text;
+        if(typeof DecompressionStream==='function'){
+          const ds=new DecompressionStream('gzip');
+          text=await new Response(buf.stream().pipeThrough(ds)).text();
+        }else{
+          throw new Error('DecompressionStream unsupported');
+        }
+        onProgress&&onProgress(.98);
+        this.text=text;
+        this.norm=deacc(text.toLowerCase());
+        this.offT=this._offsets(this.text);
+        this.offN=this._offsets(this.norm);
+        this.lines=this.offT.length-1;
+        this.state='ready';
+        try{
+          const m=await fetch('data/lt-registry.json');
+          if(m.ok)this.meta=await m.json();
+        }catch(e){}
+        onProgress&&onProgress(1);
+        return true;
+      }catch(e){
+        console.warn('registry load failed',e);
+        this.state='error';this._p=null;
+        return false;
+      }
+    })();
+    return this._p;
+  },
+  _offsets(s){
+    /* start index of every line, plus a sentinel one past the end */
+    const out=[0];
+    for(let i=s.indexOf('\n');i>=0;i=s.indexOf('\n',i+1))out.push(i+1);
+    out.push(s.length+1);
+    return Int32Array.from(out);
+  },
+  _lineAt(off,pos){
+    let lo=0,hi=off.length-2;
+    while(lo<hi){const mid=(lo+hi+1)>>1;if(off[mid]<=pos)lo=mid;else hi=mid-1;}
+    return lo;
+  },
+  row(i){
+    const a=this.offT[i],b=this.offT[i+1]-1;
+    const p=this.text.slice(a,Math.min(b,this.text.length)).split('\t');
+    return {code:p[0]||'',name:p[1]||'',address:p[2]||'',vat:p[3]||'',form:p[4]||'',status:p[5]||''};
+  },
+
+  /* Ranked substring search. Scans the folded blob with indexOf, collects at
+     most SCAN hits, scores them and returns the best `limit`. */
+  search(q,limit){
+    limit=limit||25;
+    if(this.state!=='ready')return [];
+    const nq=normQ(q).trim();
+    if(nq.length<3)return [];
+    const isCode=/^\d{5,}$/.test(nq);
+    const SCAN=600;
+    const seen=new Set(),hits=[];
+    let pos=0;
+    while(hits.length<SCAN){
+      const i=this.norm.indexOf(nq,pos);
+      if(i<0)break;
+      pos=i+nq.length;
+      const ln=this._lineAt(this.offN,i);
+      if(seen.has(ln))continue;
+      seen.add(ln);
+      hits.push({ln,at:i-this.offN[ln]});
+    }
+    const out=hits.map(h=>{
+      const r=this.row(h.ln);
+      const nameStart=r.code.length+1;
+      const nameEnd=nameStart+r.name.length;
+      let score;
+      if(h.at===0)score=isCode&&r.code===nq?100:70;          /* company code */
+      else if(h.at===nameStart)score=60;                      /* name starts with */
+      else if(h.at<nameEnd)score=40-Math.min(20,h.at-nameStart)/2;  /* inside name */
+      else score=10;                                          /* address only */
+      if(r.status)score-=15;
+      if(r.vat)score+=2;
+      score-=Math.min(8,r.name.length/40);                    /* prefer tighter names */
+      return {...r,score};
+    });
+    out.sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,'lt'));
+    return out.slice(0,limit);
+  }
+};
+
+/* Map a registry row onto the customer shape the app stores. */
+function customerFromRegistry(r){
+  return {id:uid(),kind:'company',name:r.name,code:r.code,vat:r.vat,address:r.address,
+          email:'',phone:'',contact:'',term:null,note:r.status?t('regFlagged')+' '+r.status:'',
+          src:'registry',form:r.form};
+}
+</script>
+
+<script>
+/* ===================== shell ===================== */
+const TABS=[
+  {id:'dash',     ic:'▤', key:'tabDash'},
+  {id:'invoices', ic:'▦', key:'tabInvoices'},
+  {id:'editor',   ic:'✎', key:'tabEditor', hidden:()=>!EDIT},
+  {id:'customers',ic:'☺', key:'tabCustomers'},
+  {id:'items',    ic:'◈', key:'tabItems'},
+  {id:'settings', ic:'⚙', key:'tabSettings'}
+];
+function overdueCount(){return S.invoices.filter(i=>invStatus(i)==='over').length;}
+
+function renderTabs(){
+  const bar=$('#tabbar');
+  bar.innerHTML=TABS.filter(x=>!x.hidden||!x.hidden()).map(x=>{
+    const badge=x.id==='invoices'&&overdueCount()?`<span class="badge">${overdueCount()}</span>`:'';
+    return `<button data-tab="${x.id}" class="${VIEW===x.id?'on':''}"><span class="ic">${x.ic}</span>${esc(t(x.key))}${badge}</button>`;
+  }).join('');
+  bar.querySelectorAll('button').forEach(b=>b.onclick=()=>go(b.dataset.tab));
+}
+function go(v){
+  VIEW=v;
+  TABS.forEach(x=>{const el=$('#p-'+x.id);if(el)el.classList.toggle('on',x.id===v);});
+  renderTabs();
+  render();
+  window.scrollTo({top:0,behavior:'instant'in document.documentElement.style?'instant':'auto'});
+  try{location.hash=v==='dash'?'':'#'+v;}catch(e){}
+}
+function render(){
+  ({dash:renderDash,invoices:renderInvoices,editor:renderEditor,
+    customers:renderCustomers,items:renderItems,settings:renderSettings}[VIEW]||renderDash)();
+  renderTabs();
+}
+function renderAll(){
+  $('#brandTitle').textContent=t('appTitle');
+  $('#brandSub').textContent=t('appSub');
+  document.title=t('appTitle');
+  document.documentElement.lang=LANG;
+  $$('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
+  render();
+}
+function setLang(l){
+  if(!I18N[l])l='lt';
+  LANG=l;
+  LANGS.forEach(c=>{const b=$('#lang-'+c);if(b)b.classList.toggle('on',c===l);});
+  try{localStorage.setItem(LANG_KEY,l);}catch(e){}
+  renderAll();
+}
+function detectLang(){
+  try{const v=localStorage.getItem(LANG_KEY);if(I18N[v])return v;}catch(e){}
+  return String(navigator.language||'').toLowerCase().indexOf('lt')===0?'lt':'en';
+}
+
+/* ===================== modal ===================== */
+let modalOnSave=null;
+function openModal(title,bodyHtml,footHtml,onReady){
+  $('#modalTitle').textContent=title;
+  $('#modalBody').innerHTML=bodyHtml;
+  $('#modalFoot').innerHTML=footHtml||`<button class="btn" data-mclose>${esc(t('close'))}</button>`;
+  $('#scrim').classList.add('on');
+  $('#modalFoot').querySelectorAll('[data-mclose]').forEach(b=>b.onclick=closeModal);
+  onReady&&onReady();
+}
+function closeModal(){$('#scrim').classList.remove('on');$('#modalBody').innerHTML='';modalOnSave=null;}
+function confirmBox(msg,onYes){
+  openModal(t('confirmDel'),`<div style="font-size:13.5px">${esc(msg)}</div>`,
+    `<button class="btn" data-mclose>${esc(t('cancel'))}</button>
+     <button class="btn primary" id="cfYes">${esc(t('yes'))}</button>`,
+    ()=>{$('#cfYes').onclick=()=>{closeModal();onYes();};});
+}
+
+/* ===================== dashboard ===================== */
+function renderDash(){
+  const inv=S.invoices,now=today();
+  const live=inv.filter(i=>i.status!=='draft'&&i.type!=='proforma');
+  let unpaid=0,unpaidN=0,over=0,overN=0,lateDays=0;
+  live.forEach(i=>{
+    const c=calc(i);
+    if(c.due>0.005){
+      unpaid+=c.due;unpaidN++;
+      if(i.dueDate&&i.dueDate<now){over+=c.due;overN++;lateDays+=daysBetween(i.dueDate,now);}
+    }
+  });
+  const ym=now.slice(0,7);
+  const mo=live.filter(i=>(i.date||'').slice(0,7)===ym).map(calc);
+  const moNet=r2(mo.reduce((s,c)=>s+c.net,0)),moVat=r2(mo.reduce((s,c)=>s+c.vat,0)),moTot=r2(mo.reduce((s,c)=>s+c.total,0));
+
+  const needSetup=!S.seller.name;
+  const overdue=live.filter(i=>invStatus(i)==='over')
+                    .sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
+  const recent=inv.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.seq||0)-(a.seq||0)).slice(0,8);
+
+  const year=now.slice(0,4);
+  const months=Array.from({length:12},(_,m)=>{
+    const key=year+'-'+String(m+1).padStart(2,'0');
+    return r2(live.filter(i=>(i.date||'').slice(0,7)===key).reduce((s,i)=>s+calc(i).net,0));
+  });
+  const maxM=Math.max(1,...months);
+  const yearTotal=r2(months.reduce((a,b)=>a+b,0));
+
+  $('#p-dash').innerHTML=`
+  ${needSetup?`<div class="card"><div class="body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+     <div class="grow"><div class="eyebrow">${esc(t('dashSetup'))}</div>
+       <div class="muted" style="margin-top:4px">${esc(t('dashSetupSub'))}</div></div>
+     <button class="btn primary" id="dashSetupBtn">${esc(t('dashGoSettings'))}</button>
+   </div></div>`:''}
+
+  <div class="kpis">
+    <div class="kpi"><div class="kl">${esc(t('kpiUnpaid'))}</div><div class="kv">${money(unpaid)}</div>
+      <div class="ks">${esc(t('kpiUnpaidSub'))} ${unpaidN}</div></div>
+    <div class="kpi ${overN?'alert':''}"><div class="kl">${esc(t('kpiOverdue'))}</div><div class="kv">${money(over)}</div>
+      <div class="ks">${overN?esc(t('kpiOverdueSub'))+' '+Math.round(lateDays/overN):esc(t('dashNoOverdue'))}</div></div>
+    <div class="kpi ok"><div class="kl">${esc(t('kpiMonth'))}</div><div class="kv">${money(moTot)}</div>
+      <div class="ks">${esc(t('kpiMonthSub'))} ${money(moNet)}</div></div>
+    <div class="kpi"><div class="kl">${esc(t('kpiVat'))}</div><div class="kv">${money(moVat)}</div>
+      <div class="ks">${esc(t('kpiVatSub'))}</div></div>
+  </div>
+
+  <div class="card"><div class="body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <button class="btn primary lg" id="dashNew">＋ ${esc(t('newInvoice'))}</button>
+    <div class="muted grow">${esc(t('dashStartSub'))}</div>
+  </div></div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('dashYear'))} ${year}</h2><div class="grow"></div>
+      <span class="pill mono">${money(yearTotal)} ${esc(cur())}</span></div>
+    <div class="body">
+      <div style="display:flex;align-items:flex-end;gap:5px;height:118px">
+        ${months.map((v,m)=>`<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px" title="${money(v)}">
+          <div style="width:100%;background:${v?'var(--acc)':'var(--line)'};height:${Math.max(2,Math.round(v/maxM*92))}px;border-radius:4px 4px 0 0"></div>
+          <div class="mono" style="font-size:9.5px;color:var(--ink2)">${String(m+1).padStart(2,'0')}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('dashOverdue'))}</h2></div>
+    ${overdue.length?`<div class="body tight"><div class="tblwrap" style="border:0">${invTable(overdue,true)}</div></div>`
+      :`<div class="empty">${esc(t('dashNoOverdue'))}</div>`}
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('dashRecent'))}</h2><div class="grow"></div>
+      <button class="btn sm" id="dashAll">${esc(t('invAll'))} →</button></div>
+    ${recent.length?`<div class="body tight"><div class="tblwrap" style="border:0">${invTable(recent,true)}</div></div>`
+      :`<div class="empty"><div class="big">${esc(t('noInvoices'))}</div>${esc(t('noInvoicesSub'))}</div>`}
+  </div>`;
+
+  const sb=$('#dashSetupBtn');if(sb)sb.onclick=()=>go('settings');
+  $('#dashNew').onclick=newInvoice;
+  $('#dashAll').onclick=()=>go('invoices');
+  bindInvRows($('#p-dash'));
+}
+
+/* shared invoice table used by dashboard + list */
+function invTable(list,compact){
+  return `<table><thead><tr>
+    <th>${esc(t('colNo'))}</th><th>${esc(t('colDate'))}</th><th>${esc(t('colCustomer'))}</th>
+    <th>${esc(t('colDue'))}</th><th class="num">${esc(t('colTotal'))}</th>
+    ${compact?'':`<th class="num">${esc(t('colPaid'))}</th>`}
+    <th>${esc(t('colStatus'))}</th></tr></thead><tbody>
+    ${list.map(i=>{
+      const c=calc(i),st=invStatus(i);
+      const late=st==='over'&&i.dueDate?` <span class="muted">(+${daysBetween(i.dueDate,today())} d.)</span>`:'';
+      return `<tr class="clickable" data-inv="${i.id}">
+        <td class="mono"><b>${esc(i.no||'—')}</b></td>
+        <td class="mono">${esc(fmtDate(i.date))}</td>
+        <td>${esc((i.buyer&&i.buyer.name)||'—')}</td>
+        <td class="mono">${esc(fmtDate(i.dueDate))}${late}</td>
+        <td class="num">${money(c.total)}</td>
+        ${compact?'':`<td class="num">${c.paid?money(c.paid):'<span class="muted">—</span>'}</td>`}
+        <td><span class="pill ${st}">${esc(t(STATUS_LABEL[st]))}</span></td></tr>`;
+    }).join('')}
+  </tbody></table>`;
+}
+function bindInvRows(root){
+  (root||document).querySelectorAll('[data-inv]').forEach(tr=>{
+    tr.onclick=()=>openInvoice(tr.dataset.inv);
+  });
+}
+</script>
+
+<script>
+/* ===================== invoice list ===================== */
+let invFilter={q:'',status:'all',year:'all'};
+function renderInvoices(){
+  const years=Array.from(new Set(S.invoices.map(i=>(i.date||'').slice(0,4)).filter(Boolean))).sort().reverse();
+  let list=S.invoices.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.seq||0)-(a.seq||0));
+  if(invFilter.year!=='all')list=list.filter(i=>(i.date||'').slice(0,4)===invFilter.year);
+  if(invFilter.status!=='all')list=list.filter(i=>invStatus(i)===invFilter.status);
+  if(invFilter.q){
+    const q=normQ(invFilter.q);
+    list=list.filter(i=>normQ([i.no,(i.buyer&&i.buyer.name)||'',(i.buyer&&i.buyer.code)||'',
+      money(calc(i).total),i.notes||''].join(' ')).includes(q));
+  }
+  const tot=list.reduce((s,i)=>s+calc(i).total,0);
+  const FIL=[['all','invAll'],['draft','invDraft'],['sent','invSent'],['over','invOverdue'],['paid','invPaid']];
+
+  $('#p-invoices').innerHTML=`
+  <div class="card"><div class="head">
+    <input id="invQ" placeholder="${esc(t('invSearch'))}" value="${esc(invFilter.q)}" style="max-width:320px">
+    <div class="btnrow">${FIL.map(([k,l])=>`<button class="btn sm ${invFilter.status===k?'primary':''}" data-fs="${k}">${esc(t(l))}</button>`).join('')}</div>
+    <select id="invYear" style="width:auto"><option value="all">${esc(t('allYears'))}</option>
+      ${years.map(y=>`<option value="${y}" ${invFilter.year===y?'selected':''}>${y}</option>`).join('')}</select>
+    <div class="grow"></div>
+    <span class="pill mono">${list.length} · ${money(tot)} ${esc(cur())}</span>
+    <button class="btn sm" id="invCsv">${esc(t('exportCsv'))}</button>
+    <button class="btn sm primary" id="invNew">＋ ${esc(t('newInvoice'))}</button>
+  </div>
+  ${list.length?`<div class="body tight"><div class="tblwrap" style="border:0">${invTable(list,false)}</div></div>`
+    :`<div class="empty"><div class="big">${esc(t('noInvoices'))}</div>${esc(t('noInvoicesSub'))}</div>`}
+  </div>`;
+
+  const q=$('#invQ');
+  q.oninput=()=>{invFilter.q=q.value;renderInvoices();$('#invQ').focus();
+    $('#invQ').setSelectionRange(q.value.length,q.value.length);};
+  $$('#p-invoices [data-fs]').forEach(b=>b.onclick=()=>{invFilter.status=b.dataset.fs;renderInvoices();});
+  $('#invYear').onchange=e=>{invFilter.year=e.target.value;renderInvoices();};
+  $('#invNew').onclick=newInvoice;
+  $('#invCsv').onclick=()=>exportCsv(list);
+  bindInvRows($('#p-invoices'));
+}
+
+/* ===================== invoice create / open ===================== */
+function newInvoice(){
+  if(!S.seller.name)toast(t('needSellerName'));
+  const s=S.settings;
+  EDIT={
+    id:uid(),seq:s.next,no:makeNumber(s.next),
+    type:s.vatPayer?'invoice':'simple',
+    date:today(),dueDate:addDays(today(),s.term|0),term:s.term|0,
+    buyer:null,customerId:null,
+    lines:[blankLine()],
+    notes:s.note||'',currency:s.currency||'EUR',
+    status:'draft',payments:[],
+    issuer:S.seller.director||'',receiver:'',
+    createdAt:new Date().toISOString(),isNew:true
+  };
+  go('editor');
+}
+function blankLine(){
+  return {id:uid(),name:'',qty:1,unit:S.settings.unit||'vnt',price:0,disc:0,
+          vat:S.settings.vatPayer?num(S.settings.vatRate):0};
+}
+function openInvoice(id){
+  const inv=S.invoices.find(x=>x.id===id);
+  if(!inv)return;
+  EDIT=JSON.parse(JSON.stringify(inv));
+  EDIT.isNew=false;
+  go('editor');
+}
+function commitInvoice(){
+  if(!EDIT)return false;
+  if(!EDIT.buyer||!EDIT.buyer.name){toast(t('edNoBuyer'),true);return false;}
+  if(!(EDIT.lines||[]).some(l=>String(l.name||'').trim()||num(l.price))){toast(t('edNoLines'),true);return false;}
+  const copy=JSON.parse(JSON.stringify(EDIT));
+  delete copy.isNew;
+  const ix=S.invoices.findIndex(x=>x.id===copy.id);
+  if(ix>=0)S.invoices[ix]=copy;
+  else{
+    S.invoices.push(copy);
+    if(copy.seq>=S.settings.next)S.settings.next=copy.seq+1;
+    /* count catalogue usage once, when the invoice is first stored - doing it
+       on every save would inflate the popularity sort on the items tab */
+    (copy.lines||[]).forEach(l=>{
+      if(!l.itemId)return;
+      const it=S.items.find(x=>x.id===l.itemId);
+      if(it)it.used=(it.used||0)+1;
+    });
+  }
+  EDIT.isNew=false;
+  saveNow();
+  return true;
+}
+</script>
+
+<script>
+/* ===================== editor ===================== */
+const DOC_TYPES=[['invoice','typeInvoice'],['simple','typeSimple'],['proforma','typeProforma'],['credit','typeCredit']];
+
+function sellerCardHtml(){
+  const s=S.seller;
+  const bank=(s.banks||[]).filter(b=>b.iban).map(b=>`${esc(b.bank||'')} ${esc(b.iban)}`).join('<br>');
+  return `<div class="party">
+    <div class="sect-title">${esc(t('edSeller'))}</div>
+    <div class="pn">${esc(s.name||'—')}</div>
+    <div class="pd">${[s.code?t('pdfCode')+' '+s.code:'',s.vat?t('pdfVat')+' '+s.vat:'',s.address,s.email,s.phone]
+      .filter(Boolean).map(esc).join('<br>')}${bank?'<br>'+bank:''}</div>
+    <button class="btn sm" id="edSellerEdit" style="margin-top:9px">${esc(t('edChange'))}</button>
+  </div>`;
+}
+function buyerCardHtml(){
+  const b=EDIT.buyer;
+  if(!b)return `<div class="party" style="background:#fff;border-style:dashed">
+    <div class="sect-title">${esc(t('edBuyer'))}</div>
+    <div class="combo"><input id="buyerQ" placeholder="${esc(t('edPickBuyer'))}" autocomplete="off">
+      <div class="menu" id="buyerMenu"></div></div>
+    <div class="btnrow" style="margin-top:9px">
+      <button class="btn sm" id="buyerManual">${esc(t('useManual'))}</button>
+      <button class="btn sm" id="buyerRegistry">${esc(t('regFind'))}</button>
+    </div></div>`;
+  return `<div class="party">
+    <div class="sect-title">${esc(t('edBuyer'))}</div>
+    <div class="pn">${esc(b.name)}</div>
+    <div class="pd">${[b.code?t('pdfCode')+' '+b.code:'',b.vat?t('pdfVat')+' '+b.vat:'',b.address,b.email,b.phone,b.contact]
+      .filter(Boolean).map(esc).join('<br>')}</div>
+    ${b.note?`<div class="note warn" style="margin-top:8px">${esc(b.note)}</div>`:''}
+    <div class="btnrow" style="margin-top:9px">
+      <button class="btn sm" id="buyerChange">${esc(t('edChange'))}</button>
+      <button class="btn sm" id="buyerEdit">${esc(t('edEditBuyer'))}</button>
+    </div></div>`;
+}
+
+function renderEditor(){
+  if(!EDIT){go('invoices');return;}
+  const s=S.settings,showD=s.showDisc;
+  $('#p-editor').innerHTML=`
+  <div class="btnrow" style="margin-bottom:12px">
+    <button class="btn sm" id="edBack">${esc(t('edBack'))}</button>
+    <div class="grow"></div>
+    ${EDIT.isNew?'':`<span class="pill ${invStatus(EDIT)}">${esc(t(STATUS_LABEL[invStatus(EDIT)]))}</span>`}
+  </div>
+
+  <div class="card"><div class="body">
+    <div class="grid4">
+      <label class="f"><span class="l">${esc(t('edType'))}</span>
+        <select id="edType">${DOC_TYPES.map(([k,l])=>`<option value="${k}" ${EDIT.type===k?'selected':''}>${esc(t(l))}</option>`).join('')}</select></label>
+      <label class="f"><span class="l">${esc(t('edNumber'))}</span>
+        <input id="edNo" value="${esc(EDIT.no||'')}" class="mono"></label>
+      <label class="f"><span class="l">${esc(t('edDate'))}</span>
+        <input type="date" id="edDate" value="${esc(EDIT.date||'')}"></label>
+      <label class="f"><span class="l">${esc(t('edDue'))}</span>
+        <input type="date" id="edDue" value="${esc(EDIT.dueDate||'')}"></label>
+    </div>
+  </div></div>
+
+  <div class="ed-top" style="margin-bottom:16px">
+    <div id="buyerBox">${buyerCardHtml()}</div>
+    <div id="sellerBox">${sellerCardHtml()}</div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('edLines'))}</h2><div class="grow"></div>
+      ${S.items.length?`<button class="btn sm" id="edFromCat">${esc(t('edAddFromCat'))}</button>`:''}
+      <button class="btn sm primary" id="edAddLine">${esc(t('edAddLine'))}</button></div>
+    <div class="body tight"><div class="tblwrap" style="border:0">
+      <table id="linesTbl"><thead><tr>
+        <th style="min-width:220px">${esc(t('lnName'))}</th>
+        <th class="num" style="width:88px">${esc(t('lnQty'))}</th>
+        <th style="width:86px">${esc(t('lnUnit'))}</th>
+        <th class="num" style="width:104px">${esc(t('lnPrice'))}</th>
+        ${showD?`<th class="num" style="width:80px">${esc(t('lnDisc'))}</th>`:''}
+        <th class="num" style="width:78px">${esc(t('lnVat'))}</th>
+        <th class="num" style="width:110px">${esc(t('lnSum'))}</th>
+        <th style="width:34px"></th></tr></thead>
+        <tbody id="linesBody"></tbody></table>
+    </div></div>
+  </div>
+
+  <div class="ed-top">
+    <div class="card"><div class="body">
+      <label class="f"><span class="l">${esc(t('edNotes'))}</span>
+        <textarea id="edNotes" placeholder="${esc(t('edNotesPh'))}">${esc(EDIT.notes||'')}</textarea></label>
+      <div class="grid2" style="margin-top:12px">
+        <label class="f"><span class="l">${esc(t('edIssuer'))}</span><input id="edIssuer" value="${esc(EDIT.issuer||'')}"></label>
+        <label class="f"><span class="l">${esc(t('edReceiver'))}</span><input id="edReceiver" value="${esc(EDIT.receiver||'')}"></label>
+      </div>
+    </div></div>
+    <div class="card"><div class="body"><div class="totals-box" id="edTotals"></div></div></div>
+  </div>
+
+  <div class="actionbar">
+    <button class="btn primary" id="edSave">${esc(t('edSave'))}</button>
+    <button class="btn" id="edPdf">${esc(t('edPdf'))}</button>
+    <button class="btn" id="edMail">${esc(t('edMail'))}</button>
+    <button class="btn" id="edXml">${esc(t('edXml'))}</button>
+    <div class="grow"></div>
+    ${EDIT.isNew?'':`<button class="btn" id="edPay">${esc(t('edPayments'))}</button>
+      <button class="btn good" id="edPaid">${esc(t('edMarkPaid'))}</button>
+      <button class="btn" id="edCopy">${esc(t('edCopy'))}</button>
+      <button class="btn danger" id="edDel">${esc(t('edDelete'))}</button>`}
+  </div>`;
+
+  renderLines();
+  refreshTotals();
+  bindEditorTop();
+  bindBuyerBox();
+}
+
+function bindEditorTop(){
+  $('#edBack').onclick=()=>{EDIT=null;go('invoices');};
+  $('#edType').onchange=e=>{
+    EDIT.type=e.target.value;
+    if(EDIT.type==='simple')EDIT.lines.forEach(l=>l.vat=0);
+    renderLines();refreshTotals();
+  };
+  $('#edNo').oninput=e=>{EDIT.no=e.target.value;};
+  $('#edDate').onchange=e=>{
+    EDIT.date=e.target.value||today();
+    EDIT.dueDate=addDays(EDIT.date,EDIT.term|0);
+    $('#edDue').value=EDIT.dueDate;
+  };
+  $('#edDue').onchange=e=>{
+    EDIT.dueDate=e.target.value;
+    if(EDIT.date&&EDIT.dueDate)EDIT.term=daysBetween(EDIT.date,EDIT.dueDate);
+  };
+  $('#edNotes').oninput=e=>{EDIT.notes=e.target.value;};
+  $('#edIssuer').oninput=e=>{EDIT.issuer=e.target.value;};
+  $('#edReceiver').oninput=e=>{EDIT.receiver=e.target.value;};
+  $('#edSellerEdit').onclick=()=>go('settings');
+  $('#edAddLine').onclick=()=>{EDIT.lines.push(blankLine());renderLines();refreshTotals();
+    const rows=$$('#linesBody input[data-k="name"]');rows[rows.length-1]&&rows[rows.length-1].focus();};
+  const fc=$('#edFromCat');if(fc)fc.onclick=pickFromCatalogue;
+
+  $('#edSave').onclick=()=>{if(commitInvoice()){toast(t('saved'));render();}};
+  $('#edPdf').onclick=()=>{if(commitInvoice())printInvoice(EDIT);};
+  $('#edMail').onclick=()=>{if(commitInvoice())mailInvoice(EDIT);};
+  $('#edXml').onclick=()=>{if(commitInvoice())exportUbl(EDIT);};
+  const p=$('#edPay');if(p)p.onclick=()=>paymentsModal(EDIT);
+  const pd=$('#edPaid');if(pd)pd.onclick=()=>{
+    const c=calc(EDIT);
+    if(c.due<=0.005){toast(t('stPaid'));return;}
+    EDIT.payments=EDIT.payments||[];
+    EDIT.payments.push({id:uid(),date:today(),amount:c.due,note:''});
+    if(EDIT.status==='draft')EDIT.status='sent';
+    commitInvoice();refreshTotals();renderEditor();toast(t('saved'));
+  };
+  const cp=$('#edCopy');if(cp)cp.onclick=duplicateInvoice;
+  const dl=$('#edDel');if(dl)dl.onclick=()=>confirmBox(EDIT.no||'',()=>{
+    S.invoices=S.invoices.filter(x=>x.id!==EDIT.id);
+    EDIT=null;saveNow();toast(t('deleted'));go('invoices');
+  });
+}
+
+function renderLines(){
+  const showD=S.settings.showDisc;
+  /* data-c / data-lab drive the stacked card layout on phones (see CSS) */
+  $('#linesBody').innerHTML=(EDIT.lines||[]).map((l,i)=>`
+    <tr data-i="${i}">
+      <td data-c="name" data-lab="${esc(t('lnName'))}"><input data-k="name" value="${esc(l.name||'')}" list="itemNames" placeholder="${esc(t('lnName'))}"></td>
+      <td data-c="qty" data-lab="${esc(t('lnQty'))}"><input data-k="qty" type="number" step="any" value="${l.qty}"></td>
+      <td data-c="unit" data-lab="${esc(t('lnUnit'))}"><input data-k="unit" value="${esc(l.unit||'')}"></td>
+      <td data-c="price" data-lab="${esc(t('lnPrice'))}"><input data-k="price" type="number" step="any" value="${l.price}"></td>
+      ${showD?`<td data-c="disc" data-lab="${esc(t('lnDisc'))}"><input data-k="disc" type="number" step="any" value="${l.disc||0}"></td>`:''}
+      <td data-c="vat" data-lab="${esc(t('lnVat'))}"><input data-k="vat" type="number" step="any" value="${l.vat||0}"></td>
+      <td class="num" data-c="sum" data-lab="${esc(t('lnSum'))}" data-sum>${money(lineNet(l))}</td>
+      <td data-c="del"><button class="icon-btn" data-del title="${esc(t('del'))}">✕</button></td>
+    </tr>`).join('')
+    +`<datalist id="itemNames">${S.items.map(it=>`<option value="${esc(it.name)}">`).join('')}</datalist>`;
+
+  $$('#linesBody tr').forEach(tr=>{
+    const i=+tr.dataset.i;
+    tr.querySelectorAll('input').forEach(inp=>{
+      inp.oninput=()=>{
+        const k=inp.dataset.k;
+        EDIT.lines[i][k]=(k==='name'||k==='unit')?inp.value:num(inp.value);
+        if(k==='name'){
+          /* typing a catalogue name fills unit / price / VAT once */
+          const it=S.items.find(x=>x.name===inp.value);
+          if(it){
+            const row=EDIT.lines[i];
+            row.unit=it.unit||row.unit;row.price=num(it.price);
+            row.vat=EDIT.type==='simple'?0:num(it.vat);row.itemId=it.id;
+            tr.querySelector('[data-k="unit"]').value=row.unit;
+            tr.querySelector('[data-k="price"]').value=row.price;
+            tr.querySelector('[data-k="vat"]').value=row.vat;
+          }
+        }
+        tr.querySelector('[data-sum]').textContent=money(lineNet(EDIT.lines[i]));
+        refreshTotals();
+      };
+      inp.onkeydown=e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(i===EDIT.lines.length-1){EDIT.lines.push(blankLine());renderLines();refreshTotals();
+            const rows=$$('#linesBody input[data-k="name"]');rows[rows.length-1].focus();}
+          else $$('#linesBody tr')[i+1].querySelector('[data-k="name"]').focus();
+        }
+      };
+    });
+    tr.querySelector('[data-del]').onclick=()=>{
+      EDIT.lines.splice(i,1);
+      if(!EDIT.lines.length)EDIT.lines.push(blankLine());
+      renderLines();refreshTotals();
+    };
+  });
+}
+
+function refreshTotals(){
+  const c=calc(EDIT),showD=S.settings.showDisc;
+  $('#edTotals').innerHTML=`
+    ${showD&&c.disc?`<div class="tr"><div class="tl">${esc(t('edDiscount'))}</div><div class="tv">−${money(c.disc)}</div></div>`:''}
+    <div class="tr"><div class="tl">${esc(t('edSubtotal'))}</div><div class="tv">${money(c.net)}</div></div>
+    ${c.vatRows.filter(v=>v.rate>0).map(v=>`<div class="tr"><div class="tl">${esc(t('edVat'))} ${v.rate}% <span class="muted">(${money(v.base)})</span></div><div class="tv">${money(v.amt)}</div></div>`).join('')}
+    <div class="grand"><div class="tl">${esc(t('edTotal'))}</div><div class="tv">${money(c.total)}</div></div>
+    ${c.paid?`<div class="tr" style="margin-top:9px"><div class="tl">${esc(t('pdfPaid'))}</div><div class="tv">${money(c.paid)}</div></div>
+      <div class="tr"><div class="tl"><b>${esc(t('edDueNow'))}</b></div><div class="tv">${money(c.due)}</div></div>`:''}
+    <div class="muted" style="margin-top:9px;font-size:11.5px">${esc(amountWords(c.total))}</div>`;
+}
+
+function duplicateInvoice(){
+  const s=S.settings;
+  const copy=JSON.parse(JSON.stringify(EDIT));
+  copy.id=uid();copy.seq=s.next;copy.no=makeNumber(s.next);
+  copy.date=today();copy.dueDate=addDays(today(),copy.term|0);
+  copy.status='draft';copy.payments=[];copy.isNew=true;
+  copy.lines=(copy.lines||[]).map(l=>({...l,id:uid()}));
+  EDIT=copy;renderEditor();toast(t('copied'));
+}
+
+function pickFromCatalogue(){
+  const list=S.items.slice().sort((a,b)=>(b.used||0)-(a.used||0)||a.name.localeCompare(b.name,'lt'));
+  openModal(t('edAddFromCat'),
+    `<div class="tblwrap"><table><thead><tr><th>${esc(t('itemName'))}</th><th>${esc(t('itemUnit'))}</th>
+      <th class="num">${esc(t('itemPrice'))}</th><th class="num">${esc(t('itemVat'))}</th></tr></thead><tbody>
+      ${list.map(it=>`<tr class="clickable" data-it="${it.id}"><td>${esc(it.name)}</td><td>${esc(it.unit||'')}</td>
+        <td class="num">${money(it.price)}</td><td class="num">${num(it.vat)}%</td></tr>`).join('')}
+    </tbody></table></div>`,
+    `<button class="btn" data-mclose>${esc(t('close'))}</button>`,
+    ()=>{$$('#modalBody [data-it]').forEach(tr=>tr.onclick=()=>{
+      const it=S.items.find(x=>x.id===tr.dataset.it);
+      const last=EDIT.lines[EDIT.lines.length-1];
+      const row={id:uid(),name:it.name,qty:1,unit:it.unit||S.settings.unit,price:num(it.price),
+                 disc:0,vat:EDIT.type==='simple'?0:num(it.vat),itemId:it.id};
+      if(last&&!String(last.name||'').trim()&&!num(last.price))EDIT.lines[EDIT.lines.length-1]=row;
+      else EDIT.lines.push(row);
+      closeModal();renderLines();refreshTotals();
+    });});
+}
+
+/* ===================== payments ===================== */
+function paymentsModal(inv){
+  const draw=()=>{
+    const c=calc(inv);
+    $('#modalBody').innerHTML=`
+      <div class="grid3" style="align-items:end">
+        <label class="f"><span class="l">${esc(t('payDate'))}</span><input type="date" id="pDate" value="${today()}"></label>
+        <label class="f"><span class="l">${esc(t('payAmount'))}</span><input type="number" step="any" id="pAmt" value="${c.due>0?c.due:''}"></label>
+        <label class="f"><span class="l">${esc(t('payNote'))}</span><input id="pNote"></label>
+      </div>
+      <div class="btnrow" style="margin:12px 0"><button class="btn primary sm" id="pAdd">${esc(t('payAdd'))}</button>
+        <span class="muted">${esc(t('payRest'))} <b class="mono">${money(c.due)}</b></span></div>
+      ${(inv.payments||[]).length?`<div class="tblwrap"><table><thead><tr><th>${esc(t('payDate'))}</th>
+        <th class="num">${esc(t('payAmount'))}</th><th>${esc(t('payNote'))}</th><th></th></tr></thead><tbody>
+        ${inv.payments.map(p=>`<tr><td class="mono">${esc(fmtDate(p.date))}</td><td class="num">${money(p.amount)}</td>
+          <td>${esc(p.note||'')}</td><td><button class="icon-btn" data-pd="${p.id}">✕</button></td></tr>`).join('')}
+        </tbody></table></div>`:`<div class="empty">${esc(t('payNone'))}</div>`}`;
+    $('#pAdd').onclick=()=>{
+      const a=num($('#pAmt').value);
+      if(!a){toast(t('payAmount'),true);return;}
+      inv.payments=inv.payments||[];
+      inv.payments.push({id:uid(),date:$('#pDate').value||today(),amount:a,note:$('#pNote').value});
+      if(inv.status==='draft')inv.status='sent';
+      commitInvoice();draw();refreshTotals();
+    };
+    $$('#modalBody [data-pd]').forEach(b=>b.onclick=()=>{
+      inv.payments=inv.payments.filter(p=>p.id!==b.dataset.pd);
+      commitInvoice();draw();refreshTotals();
+    });
+  };
+  openModal(t('payTitle'),'',`<button class="btn primary" data-mclose>${esc(t('close'))}</button>`,()=>{
+    draw();
+    $('#modalFoot').querySelectorAll('[data-mclose]').forEach(b=>b.onclick=()=>{closeModal();renderEditor();});
+  });
+}
+</script>
+
+<script>
+/* =========================================================================
+   Buyer picker — ONE box that searches saved customers first and the whole
+   Lithuanian company registry underneath, so a new buyer normally costs one
+   keystroke sequence and one click, with no separate "add customer" step.
+   ========================================================================= */
+function bindBuyerBox(){
+  const q=$('#buyerQ');
+  if(q){
+    attachBuyerCombo(q,$('#buyerMenu'));
+    $('#buyerManual').onclick=()=>customerModal(null,c=>setBuyer(c));
+    $('#buyerRegistry').onclick=()=>registryModal(r=>{
+      const c=customerFromRegistry(r);S.customers.push(c);saveNow();setBuyer(c);
+    });
+  }else{
+    $('#buyerChange').onclick=()=>{EDIT.buyer=null;EDIT.customerId=null;
+      $('#buyerBox').innerHTML=buyerCardHtml();bindBuyerBox();$('#buyerQ').focus();};
+    $('#buyerEdit').onclick=()=>{
+      const saved=S.customers.find(c=>c.id===EDIT.customerId);
+      customerModal(saved||EDIT.buyer,c=>setBuyer(c));
+    };
+  }
+}
+function setBuyer(c){
+  EDIT.customerId=c.id||null;
+  EDIT.buyer={name:c.name,code:c.code||'',vat:c.vat||'',address:c.address||'',
+              email:c.email||'',phone:c.phone||'',contact:c.contact||'',note:c.note||'',
+              kind:c.kind||'company'};
+  if(c.term!=null&&c.term!==''){EDIT.term=num(c.term);EDIT.dueDate=addDays(EDIT.date,EDIT.term);}
+  const due=$('#edDue');if(due)due.value=EDIT.dueDate;
+  $('#buyerBox').innerHTML=buyerCardHtml();
+  bindBuyerBox();
+}
+
+function attachBuyerCombo(input,menu){
+  let hi=-1,opts=[],timer=null;
+  const closeM=()=>{menu.classList.remove('on');hi=-1;};
+  const draw=()=>{
+    const q=input.value.trim();
+    const nq=normQ(q);
+    opts=[];
+    let html='';
+    if(nq.length>=1){
+      const saved=S.customers.filter(c=>normQ(c.name+' '+(c.code||'')+' '+(c.address||'')).includes(nq)).slice(0,6);
+      if(saved.length){
+        html+=`<div class="head-opt">${esc(t('savedCustomers'))}</div>`;
+        saved.forEach(c=>{
+          opts.push({kind:'cust',c});
+          html+=`<div class="opt" data-i="${opts.length-1}"><div class="t">${esc(c.name)}</div>
+            <div class="s">${esc([c.code,c.vat,(c.address||'').split(',')[0]].filter(Boolean).join(' · '))}</div></div>`;
+        });
+      }
+    }
+    if(nq.length>=3){
+      if(REG.state==='ready'){
+        const hits=REG.search(q,14);
+        if(hits.length){
+          html+=`<div class="head-opt">${esc(t('registryResults'))}</div>`;
+          hits.forEach(r=>{
+            opts.push({kind:'reg',r});
+            const tag=r.status?`<span class="tag bad">${esc(r.status)}</span>`
+                    :(r.vat?'<span class="tag reg">PVM</span>':'');
+            html+=`<div class="opt" data-i="${opts.length-1}">${tag}<div class="t">${esc(r.name)}</div>
+              <div class="s">${esc([r.code,r.vat,r.address].filter(Boolean).join(' · '))}</div></div>`;
+          });
+        }else if(!opts.length){
+          html+=`<div class="opt muted">${esc(t('regNoRes'))}</div>`;
+        }
+      }else if(REG.state==='loading'){
+        html+=`<div class="opt muted">${esc(t('regLoading'))}</div>`;
+      }else{
+        opts.push({kind:'load'});
+        html+=`<div class="opt" data-i="${opts.length-1}"><div class="t">⤓ ${esc(t('regLoad'))}</div>
+          <div class="s">${esc(t('regTitle'))} · 6.4 MB · ${esc(t('regSize'))}</div></div>`;
+      }
+    }else if(nq.length&&!opts.length){
+      html+=`<div class="opt muted">${esc(t('regTypeMore'))}</div>`;
+    }
+    if(!html){closeM();return;}
+    menu.innerHTML=html;
+    menu.classList.add('on');
+    menu.querySelectorAll('[data-i]').forEach(el=>el.onclick=()=>pick(+el.dataset.i));
+  };
+  const pick=i=>{
+    const o=opts[i];if(!o)return;
+    if(o.kind==='load'){
+      closeM();
+      loadRegistryWithProgress().then(ok=>{if(ok){draw();input.focus();}});
+      return;
+    }
+    if(o.kind==='cust'){closeM();setBuyer(o.c);return;}
+    const c=customerFromRegistry(o.r);
+    S.customers.push(c);saveNow();
+    closeM();setBuyer(c);
+  };
+  input.oninput=()=>{clearTimeout(timer);timer=setTimeout(draw,140);};
+  input.onfocus=()=>{if(REG.state==='idle')REG.loadIfCached().then(ok=>{if(ok&&input.value.trim().length>=3)draw();});draw();};
+  input.onkeydown=e=>{
+    const cells=Array.from(menu.querySelectorAll('[data-i]'));
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();
+      if(!cells.length)return;
+      hi=Math.max(0,Math.min(cells.length-1,hi+(e.key==='ArrowDown'?1:-1)));
+      cells.forEach((c,n)=>c.classList.toggle('hi',n===hi));
+      cells[hi].scrollIntoView({block:'nearest'});
+    }else if(e.key==='Enter'){
+      e.preventDefault();
+      if(hi>=0&&cells[hi])pick(+cells[hi].dataset.i);
+      else if(cells.length===1)pick(+cells[0].dataset.i);
+    }else if(e.key==='Escape')closeM();
+  };
+  /* re-rendering the buyer box detaches this menu; the listener drops itself
+     rather than piling up one dead handler per "Keisti" click */
+  const onDocClick=ev=>{
+    if(!menu.isConnected){document.removeEventListener('click',onDocClick,true);return;}
+    if(!menu.parentElement.contains(ev.target))closeM();
+  };
+  document.addEventListener('click',onDocClick,true);
+}
+
+/* Full-screen registry browser (also reachable from the customers tab). */
+function registryModal(onPick){
+  openModal(t('regTitle'),
+    `<div class="note" style="margin-bottom:12px">${esc(t('regHint'))}</div>
+     <input id="regQ" placeholder="${esc(t('regPh'))}" autocomplete="off">
+     <div id="regStatus" style="margin-top:10px"></div>
+     <div id="regList" style="margin-top:10px"></div>`,
+    `<button class="btn" data-mclose>${esc(t('close'))}</button>`,
+    ()=>{
+      const status=$('#regStatus'),list=$('#regList'),q=$('#regQ');
+      const paint=()=>{
+        if(REG.state==='ready'){
+          const m=REG.meta;
+          status.innerHTML=`<span class="pill">✓ ${esc(t('regLoaded'))}${m?` · ${m.companies.toLocaleString('lt-LT')} ${esc(t('regCompanies'))} · ${m.withVat.toLocaleString('lt-LT')} ${esc(t('regWithVat'))}`:''}</span>`;
+        }else if(REG.state==='loading'){
+          status.innerHTML=`<div class="muted">${esc(t('regLoading'))}</div><div class="prog"><i id="regBar"></i></div>`;
+        }else if(REG.state==='error'){
+          status.innerHTML=`<div class="note warn">${esc(t('regUnavail'))}</div>`;
+        }else{
+          status.innerHTML=`<button class="btn primary sm" id="regLoadBtn">⤓ ${esc(t('regLoad'))} (6.4 MB)</button>`;
+          $('#regLoadBtn').onclick=()=>{loadRegistryWithProgress(p=>{
+            const bar=$('#regBar');if(bar)bar.style.width=Math.round(p*100)+'%';
+            if(!bar)paint();
+          }).then(()=>{paint();search();});paint();};
+        }
+      };
+      const search=()=>{
+        const v=q.value.trim();
+        if(REG.state!=='ready'){list.innerHTML='';return;}
+        if(normQ(v).length<3){list.innerHTML=`<div class="empty">${esc(t('regTypeMore'))}</div>`;return;}
+        const hits=REG.search(v,40);
+        list.innerHTML=hits.length?`<div class="tblwrap"><table><thead><tr>
+            <th>${esc(t('custName'))}</th><th>${esc(t('custCode'))}</th><th>${esc(t('custVat'))}</th>
+            <th>${esc(t('custAddr'))}</th></tr></thead><tbody>
+            ${hits.map(r=>`<tr class="clickable" data-code="${esc(r.code)}">
+              <td>${esc(r.name)}${r.status?` <span class="pill over">${esc(r.status)}</span>`:''}</td>
+              <td class="mono">${esc(r.code)}</td><td class="mono">${esc(r.vat||'—')}</td>
+              <td class="muted">${esc(r.address)}</td></tr>`).join('')}
+          </tbody></table></div>`:`<div class="empty">${esc(t('regNoRes'))}</div>`;
+        list.querySelectorAll('[data-code]').forEach(tr=>tr.onclick=()=>{
+          const r=hits.find(x=>x.code===tr.dataset.code);
+          closeModal();onPick(r);
+        });
+      };
+      let tm=null;
+      q.oninput=()=>{clearTimeout(tm);tm=setTimeout(search,140);};
+      paint();
+      if(REG.state==='idle')REG.loadIfCached().then(ok=>{paint();if(ok)search();});
+      q.focus();
+    });
+}
+function loadRegistryWithProgress(onP){
+  const ok=REG.load(onP||(()=>{}));
+  return ok.then(done=>{
+    if(!done)toast(t('regUnavail'),true);
+    return done;
+  });
+}
+</script>
+
+<script>
+/* ===================== customers ===================== */
+let custQ='';
+function custStats(id){
+  const list=S.invoices.filter(i=>i.customerId===id&&i.status!=='draft');
+  return {n:list.length,sum:r2(list.reduce((s,i)=>s+calc(i).total,0))};
+}
+function renderCustomers(){
+  const nq=normQ(custQ);
+  const list=S.customers.filter(c=>!nq||normQ([c.name,c.code,c.vat,c.address,c.email].join(' ')).includes(nq))
+                        .sort((a,b)=>a.name.localeCompare(b.name,'lt'));
+  $('#p-customers').innerHTML=`
+  <div class="card"><div class="head">
+    <input id="custQ" placeholder="${esc(t('custSearch'))}" value="${esc(custQ)}" style="max-width:300px">
+    <div class="grow"></div>
+    <span class="pill mono">${list.length}</span>
+    <button class="btn sm" id="custReg">${esc(t('regFind'))}</button>
+    <button class="btn sm primary" id="custAdd">${esc(t('custAdd'))}</button>
+  </div>
+  ${list.length?`<div class="body tight"><div class="tblwrap" style="border:0"><table><thead><tr>
+      <th>${esc(t('custName'))}</th><th>${esc(t('custCode'))}</th><th>${esc(t('custVat'))}</th>
+      <th>${esc(t('custAddr'))}</th><th class="num">${esc(t('custInvoices'))}</th>
+      <th class="num">${esc(t('custTurnover'))}</th><th style="width:70px"></th></tr></thead><tbody>
+      ${list.map(c=>{const st=custStats(c.id);return `<tr>
+        <td><b>${esc(c.name)}</b>${c.kind==='person'?` <span class="pill">${esc(t('kindPerson'))}</span>`:''}</td>
+        <td class="mono">${esc(c.code||'—')}</td><td class="mono">${esc(c.vat||'—')}</td>
+        <td class="muted" style="white-space:normal;max-width:340px">${esc(c.address||'')}</td>
+        <td class="num">${st.n||'—'}</td><td class="num">${st.sum?money(st.sum):'—'}</td>
+        <td style="white-space:nowrap">
+          <button class="icon-btn mv" data-ce="${c.id}" title="${esc(t('edEditBuyer'))}">✎</button>
+          <button class="icon-btn mv" data-ci="${c.id}" title="${esc(t('newInvoice'))}">＋</button>
+          <button class="icon-btn" data-cd="${c.id}" title="${esc(t('del'))}">✕</button></td></tr>`;}).join('')}
+    </tbody></table></div></div>`
+    :`<div class="empty"><div class="big">${esc(t('custNone'))}</div>${esc(t('custNoneSub'))}</div>`}
+  </div>`;
+
+  const q=$('#custQ');
+  q.oninput=()=>{custQ=q.value;renderCustomers();const el=$('#custQ');el.focus();el.setSelectionRange(el.value.length,el.value.length);};
+  $('#custAdd').onclick=()=>customerModal(null,c=>{S.customers.push(c);saveNow();renderCustomers();});
+  $('#custReg').onclick=()=>registryModal(r=>{
+    const ex=S.customers.find(c=>c.code&&c.code===r.code);
+    if(ex){toast(ex.name);return;}
+    S.customers.push(customerFromRegistry(r));saveNow();renderCustomers();
+  });
+  $$('#p-customers [data-ce]').forEach(b=>b.onclick=()=>{
+    const c=S.customers.find(x=>x.id===b.dataset.ce);
+    customerModal(c,upd=>{Object.assign(c,upd);saveNow();renderCustomers();});
+  });
+  $$('#p-customers [data-ci]').forEach(b=>b.onclick=()=>{
+    const c=S.customers.find(x=>x.id===b.dataset.ci);
+    newInvoice();setBuyer(c);
+  });
+  $$('#p-customers [data-cd]').forEach(b=>b.onclick=()=>{
+    const c=S.customers.find(x=>x.id===b.dataset.cd);
+    confirmBox(t('custDelConfirm')+' '+c.name,()=>{
+      S.customers=S.customers.filter(x=>x.id!==c.id);saveNow();renderCustomers();toast(t('deleted'));
+    });
+  });
+}
+
+function customerModal(c,onSave){
+  const e=c||{id:uid(),kind:'company',name:'',code:'',vat:'',address:'',email:'',phone:'',contact:'',term:'',note:''};
+  openModal(c?t('edEditBuyer'):t('custAdd'),
+    `<div class="grid2">
+      <label class="f"><span class="l">${esc(t('custKind'))}</span><select id="cKind">
+        <option value="company" ${e.kind!=='person'?'selected':''}>${esc(t('kindCompany'))}</option>
+        <option value="person" ${e.kind==='person'?'selected':''}>${esc(t('kindPerson'))}</option></select></label>
+      <label class="f"><span class="l">${esc(t('custName'))}</span>
+        <div class="combo"><input id="cName" value="${esc(e.name)}" autocomplete="off"><div class="menu" id="cMenu"></div></div></label>
+      <label class="f"><span class="l">${esc(t('custCode'))}</span><input id="cCode" value="${esc(e.code)}" class="mono"></label>
+      <label class="f"><span class="l">${esc(t('custVat'))}</span><input id="cVat" value="${esc(e.vat)}" class="mono"></label>
+     </div>
+     <label class="f" style="margin-top:12px"><span class="l">${esc(t('custAddr'))}</span><input id="cAddr" value="${esc(e.address)}"></label>
+     <div class="grid3" style="margin-top:12px">
+      <label class="f"><span class="l">${esc(t('custEmail'))}</span><input id="cEmail" type="email" value="${esc(e.email)}"></label>
+      <label class="f"><span class="l">${esc(t('custPhone'))}</span><input id="cPhone" value="${esc(e.phone)}"></label>
+      <label class="f"><span class="l">${esc(t('custContact'))}</span><input id="cContact" value="${esc(e.contact||'')}"></label>
+     </div>
+     <div class="grid2" style="margin-top:12px">
+      <label class="f"><span class="l">${esc(t('custTerm'))}</span><input id="cTerm" type="number" value="${e.term==null?'':esc(e.term)}" placeholder="${S.settings.term}"></label>
+      <label class="f"><span class="l">${esc(t('custNote'))}</span><input id="cNote" value="${esc(e.note||'')}"></label>
+     </div>
+     <div class="note" style="margin-top:12px">${esc(t('regHint'))}</div>`,
+    `<button class="btn" data-mclose>${esc(t('cancel'))}</button>
+     <button class="btn primary" id="cSave">${esc(t('save'))}</button>`,
+    ()=>{
+      /* the name field doubles as a registry lookup so a manual entry can
+         still be completed from the register without leaving the dialog */
+      const name=$('#cName'),menu=$('#cMenu');
+      let tm=null;
+      const draw=()=>{
+        const v=name.value.trim();
+        if(REG.state!=='ready'||normQ(v).length<3){menu.classList.remove('on');return;}
+        const hits=REG.search(v,10);
+        if(!hits.length){menu.classList.remove('on');return;}
+        menu.innerHTML=hits.map((r,i)=>`<div class="opt" data-i="${i}">
+          ${r.vat?'<span class="tag reg">PVM</span>':''}<div class="t">${esc(r.name)}</div>
+          <div class="s">${esc([r.code,r.vat,r.address].filter(Boolean).join(' · '))}</div></div>`).join('');
+        menu.classList.add('on');
+        menu.querySelectorAll('[data-i]').forEach(el=>el.onclick=()=>{
+          const r=hits[+el.dataset.i];
+          name.value=r.name;$('#cCode').value=r.code;$('#cVat').value=r.vat;$('#cAddr').value=r.address;
+          menu.classList.remove('on');
+        });
+      };
+      name.oninput=()=>{clearTimeout(tm);tm=setTimeout(draw,150);};
+      name.onfocus=()=>{if(REG.state==='idle')REG.loadIfCached();};
+      $('#cSave').onclick=()=>{
+        const out={...e,kind:$('#cKind').value,name:$('#cName').value.trim(),code:$('#cCode').value.trim(),
+          vat:$('#cVat').value.trim(),address:$('#cAddr').value.trim(),email:$('#cEmail').value.trim(),
+          phone:$('#cPhone').value.trim(),contact:$('#cContact').value.trim(),
+          term:$('#cTerm').value===''?null:num($('#cTerm').value),note:$('#cNote').value.trim()};
+        if(!out.name){toast(t('custName'),true);return;}
+        closeModal();onSave(out);
+      };
+      name.focus();
+    });
+}
+
+/* ===================== items catalogue ===================== */
+function renderItems(){
+  const list=S.items.slice().sort((a,b)=>(b.used||0)-(a.used||0)||a.name.localeCompare(b.name,'lt'));
+  $('#p-items').innerHTML=`
+  <div class="card"><div class="head"><h2>${esc(t('tabItems'))}</h2><div class="grow"></div>
+    <span class="pill mono">${list.length}</span>
+    <button class="btn sm primary" id="itAdd">${esc(t('itemAdd'))}</button></div>
+  ${list.length?`<div class="body tight"><div class="tblwrap" style="border:0"><table><thead><tr>
+      <th>${esc(t('itemName'))}</th><th>${esc(t('itemCode'))}</th><th>${esc(t('itemUnit'))}</th>
+      <th class="num">${esc(t('itemPrice'))}</th><th class="num">${esc(t('itemVat'))}</th>
+      <th class="num">${esc(t('itemUsed'))}</th><th style="width:56px"></th></tr></thead><tbody>
+      ${list.map(it=>`<tr>
+        <td><b>${esc(it.name)}</b></td><td class="mono">${esc(it.code||'—')}</td><td>${esc(it.unit||'')}</td>
+        <td class="num">${money(it.price)}</td><td class="num">${num(it.vat)}%</td>
+        <td class="num">${it.used||0}</td>
+        <td style="white-space:nowrap"><button class="icon-btn mv" data-ie="${it.id}">✎</button>
+          <button class="icon-btn" data-id2="${it.id}">✕</button></td></tr>`).join('')}
+    </tbody></table></div></div>`
+    :`<div class="empty"><div class="big">${esc(t('itemNone'))}</div>${esc(t('itemNoneSub'))}</div>`}
+  </div>`;
+  $('#itAdd').onclick=()=>itemModal(null,it=>{S.items.push(it);saveNow();renderItems();});
+  $$('#p-items [data-ie]').forEach(b=>b.onclick=()=>{
+    const it=S.items.find(x=>x.id===b.dataset.ie);
+    itemModal(it,upd=>{Object.assign(it,upd);saveNow();renderItems();});
+  });
+  $$('#p-items [data-id2]').forEach(b=>b.onclick=()=>{
+    const it=S.items.find(x=>x.id===b.dataset.id2);
+    confirmBox(it.name,()=>{S.items=S.items.filter(x=>x.id!==it.id);saveNow();renderItems();});
+  });
+}
+function itemModal(it,onSave){
+  const e=it||{id:uid(),name:'',code:'',unit:S.settings.unit||'vnt',price:0,vat:num(S.settings.vatRate),used:0};
+  openModal(it?t('itemName'):t('itemAdd'),
+    `<label class="f"><span class="l">${esc(t('itemName'))}</span><input id="iName" value="${esc(e.name)}"></label>
+     <div class="grid4" style="margin-top:12px">
+       <label class="f"><span class="l">${esc(t('itemCode'))}</span><input id="iCode" value="${esc(e.code||'')}"></label>
+       <label class="f"><span class="l">${esc(t('itemUnit'))}</span><input id="iUnit" value="${esc(e.unit||'')}"></label>
+       <label class="f"><span class="l">${esc(t('itemPrice'))}</span><input id="iPrice" type="number" step="any" value="${e.price}"></label>
+       <label class="f"><span class="l">${esc(t('itemVat'))}</span><input id="iVat" type="number" step="any" value="${e.vat}"></label>
+     </div>`,
+    `<button class="btn" data-mclose>${esc(t('cancel'))}</button>
+     <button class="btn primary" id="iSave">${esc(t('save'))}</button>`,
+    ()=>{
+      $('#iSave').onclick=()=>{
+        const name=$('#iName').value.trim();
+        if(!name){toast(t('itemName'),true);return;}
+        closeModal();
+        onSave({...e,name,code:$('#iCode').value.trim(),unit:$('#iUnit').value.trim(),
+                price:num($('#iPrice').value),vat:num($('#iVat').value)});
+      };
+      $('#iName').focus();
+    });
+}
+</script>
+
+<script>
+/* ===================== settings ===================== */
+function renderSettings(){
+  const s=S.seller,c=S.settings;
+  $('#p-settings').innerHTML=`
+  <div class="card">
+    <div class="head"><h2>${esc(t('setSeller'))}</h2><div class="grow"></div>
+      <span class="muted">${esc(t('setSellerSub'))}</span></div>
+    <div class="body">
+      <div class="grid2">
+        <label class="f"><span class="l">${esc(t('setName'))}</span><input data-s="name" value="${esc(s.name)}"></label>
+        <label class="f"><span class="l">${esc(t('setDirector'))}</span><input data-s="director" value="${esc(s.director)}"></label>
+        <label class="f"><span class="l">${esc(t('setCode'))}</span><input data-s="code" value="${esc(s.code)}" class="mono"></label>
+        <label class="f"><span class="l">${esc(t('setVat'))}</span><input data-s="vat" value="${esc(s.vat)}" class="mono"></label>
+      </div>
+      <label class="f" style="margin-top:12px"><span class="l">${esc(t('setAddr'))}</span><input data-s="address" value="${esc(s.address)}"></label>
+      <div class="grid3" style="margin-top:12px">
+        <label class="f"><span class="l">${esc(t('setEmail'))}</span><input data-s="email" type="email" value="${esc(s.email)}"></label>
+        <label class="f"><span class="l">${esc(t('setPhone'))}</span><input data-s="phone" value="${esc(s.phone)}"></label>
+        <label class="f"><span class="l">${esc(t('setWeb'))}</span><input data-s="web" value="${esc(s.web)}"></label>
+      </div>
+      <div style="margin-top:16px" class="btnrow">
+        ${s.logo?`<img src="${s.logo}" style="height:52px;border:1px solid var(--line);border-radius:8px;padding:5px;background:#fff">`:''}
+        <label class="btn sm">${esc(t('setLogoUp'))}<input type="file" id="logoIn" accept="image/*" style="display:none"></label>
+        ${s.logo?`<button class="btn sm danger" id="logoDel">${esc(t('setLogoDel'))}</button>`:''}
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('setBanks'))}</h2><div class="grow"></div>
+      <button class="btn sm" id="bankAdd">${esc(t('setBankAdd'))}</button></div>
+    <div class="body">
+      ${(s.banks||[]).map((b,i)=>`<div class="grid3" style="margin-bottom:9px;align-items:end">
+        <label class="f"><span class="l">${esc(t('setBankName'))}</span><input data-b="${i}.bank" value="${esc(b.bank||'')}"></label>
+        <label class="f"><span class="l">${esc(t('setIban'))}</span><input data-b="${i}.iban" value="${esc(b.iban||'')}" class="mono"></label>
+        <div style="display:flex;gap:8px;align-items:end">
+          <label class="f grow"><span class="l">${esc(t('setSwift'))}</span><input data-b="${i}.swift" value="${esc(b.swift||'')}" class="mono"></label>
+          <button class="icon-btn" data-bd="${i}">✕</button></div>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('setNumbering'))}</h2></div>
+    <div class="body">
+      <div class="grid4">
+        <label class="f"><span class="l">${esc(t('setSeries'))}</span><input data-c="series" value="${esc(c.series)}"></label>
+        <label class="f"><span class="l">${esc(t('setNext'))}</span><input data-c="next" type="number" value="${c.next}"></label>
+        <label class="f" style="grid-column:span 2"><span class="l">${esc(t('setFormat'))}</span>
+          <input data-c="format" value="${esc(c.format)}" class="mono">
+          <span class="h">${esc(t('setFormatHint'))} → <b class="mono" id="numPreview">${esc(makeNumber())}</b></span></label>
+      </div>
+      <div class="grid4" style="margin-top:12px">
+        <label class="f"><span class="l">${esc(t('setVatRate'))}</span><input data-c="vatRate" type="number" step="any" value="${c.vatRate}"></label>
+        <label class="f"><span class="l">${esc(t('setTerm'))}</span><input data-c="term" type="number" value="${c.term}"></label>
+        <label class="f"><span class="l">${esc(t('setCurrency'))}</span><input data-c="currency" value="${esc(c.currency)}"></label>
+        <label class="f"><span class="l">${esc(t('setUnit'))}</span><input data-c="unit" value="${esc(c.unit)}"></label>
+      </div>
+      <div class="grid2" style="margin-top:14px">
+        <label class="inline-check"><input type="checkbox" data-c="vatPayer" ${c.vatPayer?'checked':''}> <span>${esc(t('setVatPayer'))}</span></label>
+        <label class="inline-check"><input type="checkbox" data-c="showDisc" ${c.showDisc?'checked':''}> <span>${esc(t('setShowDisc'))}</span></label>
+        <label class="inline-check"><input type="checkbox" data-c="showWords" ${c.showWords?'checked':''}> <span>${esc(t('setShowWords'))}</span></label>
+        <label class="inline-check"><input type="checkbox" data-c="showSign" ${c.showSign?'checked':''}> <span>${esc(t('setShowSign'))}</span></label>
+      </div>
+      <div class="note" style="margin-top:12px">${esc(t('setVatPayerHint'))}</div>
+      <div class="grid2" style="margin-top:14px">
+        <label class="f"><span class="l">${esc(t('setNote'))}</span><textarea data-c="note">${esc(c.note||'')}</textarea></label>
+        <label class="f"><span class="l">${esc(t('setFooter'))}</span><textarea data-c="footer">${esc(c.footer||'')}</textarea></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('setRegistry'))}</h2></div>
+    <div class="body" id="regPanel"></div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>${esc(t('setData'))}</h2><div class="grow"></div>
+      <span class="muted">${esc(t('setDataSub'))}</span></div>
+    <div class="body btnrow">
+      <button class="btn" id="setExp">${esc(t('setExport'))}</button>
+      <button class="btn" id="setImp">${esc(t('setImport'))}</button>
+      <div class="grow"></div>
+      <button class="btn danger" id="setWipe">${esc(t('setWipe'))}</button>
+    </div>
+  </div>`;
+
+  const touch=()=>{save();$('#numPreview')&&($('#numPreview').textContent=makeNumber());};
+  $$('#p-settings [data-s]').forEach(inp=>inp.oninput=()=>{S.seller[inp.dataset.s]=inp.value;touch();});
+  $$('#p-settings [data-c]').forEach(inp=>inp.oninput=inp.onchange=()=>{
+    const k=inp.dataset.c;
+    S.settings[k]=inp.type==='checkbox'?inp.checked:(['next','vatRate','term'].includes(k)?num(inp.value):inp.value);
+    touch();
+  });
+  $$('#p-settings [data-b]').forEach(inp=>inp.oninput=()=>{
+    const [i,k]=inp.dataset.b.split('.');
+    S.seller.banks[+i][k]=inp.value;save();
+  });
+  $$('#p-settings [data-bd]').forEach(b=>b.onclick=()=>{
+    S.seller.banks.splice(+b.dataset.bd,1);
+    if(!S.seller.banks.length)S.seller.banks=[{bank:'',iban:'',swift:''}];
+    saveNow();renderSettings();
+  });
+  $('#bankAdd').onclick=()=>{S.seller.banks.push({bank:'',iban:'',swift:''});saveNow();renderSettings();};
+  $('#logoIn').onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const rd=new FileReader();
+    rd.onload=()=>{S.seller.logo=rd.result;saveNow();renderSettings();};
+    rd.readAsDataURL(f);
+  };
+  const ld=$('#logoDel');if(ld)ld.onclick=()=>{S.seller.logo='';saveNow();renderSettings();};
+  $('#setExp').onclick=exportBackup;
+  $('#setImp').onclick=()=>$('#fileIn').click();
+  $('#setWipe').onclick=()=>confirmBox(t('setWipeConfirm'),()=>{
+    S=blankState();saveNow();EDIT=null;go('dash');toast(t('deleted'));
+  });
+  paintRegPanel();
+}
+function paintRegPanel(){
+  const box=$('#regPanel');if(!box)return;
+  if(REG.state==='ready'){
+    const m=REG.meta;
+    box.innerHTML=`<div class="btnrow"><span class="pill paid">✓ ${esc(t('regLoaded'))}</span>
+      ${m?`<span class="muted">${m.companies.toLocaleString('lt-LT')} ${esc(t('regCompanies'))} · ${m.withVat.toLocaleString('lt-LT')} ${esc(t('regWithVat'))} · ${esc(m.built)}</span>`:''}
+      <div class="grow"></div><button class="btn sm" id="regOpen">${esc(t('regFind'))}</button></div>
+      <div class="note" style="margin-top:10px">${esc(t('regHint'))}</div>`;
+    $('#regOpen').onclick=()=>registryModal(r=>{
+      const ex=S.customers.find(c=>c.code&&c.code===r.code);
+      if(!ex){S.customers.push(customerFromRegistry(r));saveNow();}
+      toast(r.name);
+    });
+  }else if(REG.state==='loading'){
+    box.innerHTML=`<div class="muted">${esc(t('regLoading'))}</div><div class="prog"><i id="regBar2"></i></div>`;
+  }else{
+    box.innerHTML=`<div class="btnrow"><button class="btn primary sm" id="regLoad2">⤓ ${esc(t('regLoad'))} (6.4 MB)</button>
+      <span class="muted">${esc(t('regSize'))}</span></div>
+      <div class="note" style="margin-top:10px">${esc(t('regHint'))}</div>`;
+    $('#regLoad2').onclick=()=>{
+      loadRegistryWithProgress(p=>{const b=$('#regBar2');if(b)b.style.width=Math.round(p*100)+'%';})
+        .then(()=>paintRegPanel());
+      paintRegPanel();
+    };
+  }
+}
+
+/* ===================== exports ===================== */
+function download(name,text,mime){
+  const blob=new Blob([text],{type:mime||'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},400);
+}
+function exportBackup(){
+  download(`saskaitos-${today()}.json`,JSON.stringify(S,null,2),'application/json');
+  toast(t('saved'));
+}
+function importBackup(file){
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const p=JSON.parse(rd.result);
+      if(!p||typeof p!=='object'||!('invoices'in p))throw new Error('shape');
+      S=Object.assign(blankState(),p);
+      S.seller=Object.assign(blankState().seller,p.seller||{});
+      S.settings=Object.assign(blankState().settings,p.settings||{});
+      saveNow();EDIT=null;go('dash');toast(t('importOk'));
+    }catch(e){toast(t('importBad'),true);}
+  };
+  rd.readAsText(file);
+}
+/* Excel-friendly: semicolon separated + BOM, the shape LT accountants expect. */
+function exportCsv(list){
+  if(!list.length){toast(t('nothingSelected'),true);return;}
+  const head=['Nr','Data','Terminas','Pirkejas','Imones kodas','PVM kodas','Suma be PVM','PVM','Viso','Apmoketa','Likutis','Busena','Valiuta'];
+  const rows=list.map(i=>{
+    const c=calc(i),b=i.buyer||{};
+    return [i.no,i.date,i.dueDate,b.name||'',b.code||'',b.vat||'',
+            c.net.toFixed(2),c.vat.toFixed(2),c.total.toFixed(2),c.paid.toFixed(2),c.due.toFixed(2),
+            t(STATUS_LABEL[invStatus(i)]),i.currency||cur()];
+  });
+  const csv=[head,...rows].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  download(`saskaitos-${today()}.csv`,'﻿'+csv,'text/csv;charset=utf-8');
+}
+function mailInvoice(inv){
+  const b=inv.buyer||{},c=calc(inv);
+  const subj=`${t(docTitleKey(inv))} ${inv.no}`;
+  const body=[
+    `${b.name||''},`,'',
+    `${t(docTitleKey(inv))} ${inv.no} — ${money(c.total)} ${inv.currency||cur()}`,
+    `${t('pdfDue')}: ${fmtDate(inv.dueDate)}`,'',
+    (S.seller.banks||[]).filter(x=>x.iban).map(x=>`${x.bank||''} ${x.iban}`).join('\n'),'',
+    S.seller.name||''
+  ].join('\n');
+  location.href=`mailto:${encodeURIComponent(b.email||'')}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+}
+/* EN 16931 / UBL 2.1 — the shape the Lithuanian e-invoice gateway accepts. */
+function exportUbl(inv){
+  const c=calc(inv),s=S.seller,b=inv.buyer||{};
+  const x=v=>String(v==null?'':v).replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+  const cy=inv.currency||cur();
+  const party=(p,vat)=>`
+    <cac:Party>
+      <cac:PostalAddress><cbc:StreetName>${x(p.address)}</cbc:StreetName>
+        <cac:Country><cbc:IdentificationCode>LT</cbc:IdentificationCode></cac:Country></cac:PostalAddress>
+      ${vat?`<cac:PartyTaxScheme><cbc:CompanyID>${x(vat)}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>`:''}
+      <cac:PartyLegalEntity><cbc:RegistrationName>${x(p.name)}</cbc:RegistrationName>
+        <cbc:CompanyID>${x(p.code)}</cbc:CompanyID></cac:PartyLegalEntity>
+    </cac:Party>`;
+  const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017</cbc:CustomizationID>
+  <cbc:ID>${x(inv.no)}</cbc:ID>
+  <cbc:IssueDate>${x(inv.date)}</cbc:IssueDate>
+  <cbc:DueDate>${x(inv.dueDate)}</cbc:DueDate>
+  <cbc:InvoiceTypeCode>${inv.type==='credit'?'381':'380'}</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>${x(cy)}</cbc:DocumentCurrencyCode>
+  ${inv.notes?`<cbc:Note>${x(inv.notes)}</cbc:Note>`:''}
+  <cac:AccountingSupplierParty>${party(s,s.vat)}</cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>${party(b,b.vat)}</cac:AccountingCustomerParty>
+  ${(s.banks||[]).filter(k=>k.iban).slice(0,1).map(k=>`<cac:PaymentMeans><cbc:PaymentMeansCode>31</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount><cbc:ID>${x(k.iban)}</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>`).join('')}
+  <cac:TaxTotal><cbc:TaxAmount currencyID="${x(cy)}">${c.vat.toFixed(2)}</cbc:TaxAmount>
+    ${c.vatRows.map(v=>`<cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="${x(cy)}">${v.base.toFixed(2)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="${x(cy)}">${v.amt.toFixed(2)}</cbc:TaxAmount>
+      <cac:TaxCategory><cbc:ID>${v.rate>0?'S':'Z'}</cbc:ID><cbc:Percent>${v.rate}</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal>`).join('')}
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="${x(cy)}">${c.net.toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="${x(cy)}">${c.net.toFixed(2)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="${x(cy)}">${c.total.toFixed(2)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="${x(cy)}">${c.total.toFixed(2)}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  ${(inv.lines||[]).map((l,i)=>`<cac:InvoiceLine><cbc:ID>${i+1}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="C62">${num(l.qty)}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="${x(cy)}">${lineNet(l).toFixed(2)}</cbc:LineExtensionAmount>
+    <cac:Item><cbc:Name>${x(l.name)}</cbc:Name>
+      <cac:ClassifiedTaxCategory><cbc:ID>${num(l.vat)>0?'S':'Z'}</cbc:ID><cbc:Percent>${num(l.vat)}</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="${x(cy)}">${num(l.price).toFixed(4)}</cbc:PriceAmount></cac:Price>
+  </cac:InvoiceLine>`).join('')}
+</Invoice>`;
+  download(`${slug(inv.no)}.xml`,xml,'application/xml');
+}
+</script>
+
+<script>
+/* =========================================================================
+   Printable invoice — opened in a new window that calls print() itself, the
+   same "PDF" route the offer app uses. Carries every field the Lithuanian
+   VAT law (PVM įstatymas 80 str.) requires on a VAT invoice.
+   ========================================================================= */
+function docTitleKey(inv){
+  return {invoice:'pdfInvoice',simple:'pdfSimple',proforma:'pdfProforma',credit:'pdfCredit'}[inv.type]||'pdfInvoice';
+}
+function printInvoice(inv){
+  const s=S.seller,b=inv.buyer||{},c=calc(inv),cfg=S.settings;
+  const showD=cfg.showDisc&&(inv.lines||[]).some(l=>num(l.disc));
+  const cy=inv.currency||cur();
+  const banks=(s.banks||[]).filter(x=>x.iban);
+  const cols=6+(showD?1:0);
+
+  const rows=(inv.lines||[]).filter(l=>String(l.name||'').trim()||num(l.price)).map((l,i)=>`
+    <tr><td class="c">${i+1}</td><td>${esc(l.name)}</td>
+      <td class="c">${num(l.qty)}</td><td class="c">${esc(l.unit||'')}</td>
+      <td class="r">${money(l.price)}</td>
+      ${showD?`<td class="r">${num(l.disc)?num(l.disc)+'%':'—'}</td>`:''}
+      <td class="r">${num(l.vat)}%</td>
+      <td class="r">${money(lineNet(l))}</td></tr>`).join('');
+
+  const partyHtml=(title,p,extra)=>`
+    <div class="pty"><div class="pl">${esc(title)}</div>
+      <div class="pn">${esc(p.name||'')}</div>
+      <div class="pv">${[
+        p.code?`${t('pdfCode')} ${p.code}`:'',
+        p.vat?`${t('pdfVat')} ${p.vat}`:'',
+        p.address||'',p.phone||'',p.email||''
+      ].filter(Boolean).map(esc).join('<br>')}${extra||''}</div></div>`;
+
+  const html=`<!DOCTYPE html><html lang="${LANG}"><head><meta charset="utf-8">
+<title>${esc(t(docTitleKey(inv)))} ${esc(inv.no)}</title>
+<style>
+@page{size:A4;margin:14mm}
+body{font-family:"Inter",-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b1e26;margin:0;font-size:12px;line-height:1.5}
+.wrap{max-width:780px;margin:0 auto;padding:20px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.brandimg{max-height:66px;max-width:230px;display:block;margin-bottom:8px}
+.logo{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;letter-spacing:.04em;background:#1b1e26;color:#fff;padding:6px 12px;border-radius:6px;font-size:14px;display:inline-block}
+.sname{font-weight:700;font-size:15px;letter-spacing:-.01em;margin-top:6px}
+.doc{text-align:right;flex:none}
+.doc h1{font-size:19px;margin:0 0 8px;letter-spacing:-.015em;font-weight:750;text-transform:uppercase}
+.doc .meta{color:#7a8290;font-size:11.5px;line-height:1.85}.doc .meta b{color:#1b1e26;font-size:13px}
+.rule{height:3px;background:linear-gradient(90deg,#2f54eb,#1e3aa8 70%,#1b1e26);border-radius:3px;margin:12px 0 20px}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.pty{background:#f5f7fb;border:1px solid #e6e8ed;border-radius:11px;padding:12px 15px}
+.pl{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#9aa3b2;font-weight:700}
+.pn{font-size:14px;font-weight:700;margin-top:4px;letter-spacing:-.01em}
+.pv{color:#5b6472;font-size:11px;line-height:1.75;margin-top:4px}
+table{width:100%;border-collapse:collapse;margin-bottom:6px}
+th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#9aa3b2;border-bottom:2px solid #1b1e26;padding:8px 9px;font-weight:700}
+td{padding:9px;border-bottom:1px solid #eef0f3;vertical-align:top}
+td.c,th.c{text-align:center;white-space:nowrap}
+td.r,th.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tbody tr{page-break-inside:avoid}
+.totals{margin-top:14px;margin-left:auto;width:320px}
+.totals .tr{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid #eef0f3}
+.totals .tr .tl{color:#667085}.totals .tr .tv{font-variant-numeric:tabular-nums;font-weight:600}
+.totals .grand{margin-top:8px;background:#1b1e26;color:#fff;border-radius:11px;padding:13px 17px;display:flex;justify-content:space-between;align-items:center;gap:14px}
+.totals .grand .tl{color:#c9d4ff;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.totals .grand .tv{font-size:20px;font-weight:750;font-variant-numeric:tabular-nums}
+.words{margin-top:14px;font-size:11.5px}.words b{font-weight:600}
+.words .wl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b2;font-weight:700}
+.bank{margin-top:20px;border:1px solid #e6e8ed;border-left:3px solid #2f54eb;border-radius:11px;padding:13px 16px;background:#fbfcfe;page-break-inside:avoid}
+.bank .bl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b2;font-weight:700;margin-bottom:5px}
+.bank .bi{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.8}
+.remarks{margin-top:16px;border:1px solid #e6e8ed;border-radius:11px;padding:13px 16px;background:#fbfcfe;page-break-inside:avoid;white-space:pre-wrap}
+.remarks .rl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#9aa3b2;font-weight:700;margin-bottom:5px}
+.signs{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:38px;page-break-inside:avoid}
+.sig .sl{font-size:9.5px;color:#9aa3b2;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.sig .sline{border-bottom:1px solid #b9c0cb;height:26px;margin-top:16px}
+.sig .sn{font-size:10.5px;color:#5b6472;margin-top:5px}
+.foot{margin-top:26px;border-top:1px solid #e6e8ed;padding-top:13px;color:#9aa3b2;font-size:10px;display:flex;justify-content:space-between;gap:16px;white-space:pre-wrap}
+.noprint{position:fixed;bottom:18px;right:18px;z-index:9}
+.noprint button{font:inherit;cursor:pointer;background:#2f54eb;color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:600;box-shadow:0 3px 10px rgba(47,84,235,.32)}
+@media print{.noprint{display:none}.wrap{padding:0}}
+</style></head><body>
+<div class="noprint"><button onclick="window.print()">${esc(t('pdfPrintSave'))}</button></div>
+<div class="wrap">
+  <div class="top">
+    <div>${s.logo?`<img class="brandimg" src="${s.logo}">`:`<span class="logo">${esc((s.name||'SF').slice(0,3).toUpperCase())}</span>`}
+      <div class="sname">${esc(s.name||'')}</div></div>
+    <div class="doc"><h1>${esc(t(docTitleKey(inv)))}</h1>
+      <div class="meta">${esc(t('pdfSeriesNo'))} <b>${esc(inv.no||'')}</b><br>
+        ${esc(t('pdfDate'))}: ${esc(fmtDate(inv.date))}<br>
+        ${esc(t('pdfDue'))}: <b>${esc(fmtDate(inv.dueDate))}</b></div></div>
+  </div>
+  <div class="rule"></div>
+  <div class="parties">
+    ${partyHtml(t('pdfSeller'),s,'')}
+    ${partyHtml(t('pdfBuyer'),b,b.contact?'<br>'+esc(b.contact):'')}
+  </div>
+  <table><thead><tr>
+    <th class="c" style="width:26px">${esc(t('pdfNo'))}</th><th>${esc(t('pdfItem'))}</th>
+    <th class="c">${esc(t('pdfQty'))}</th><th class="c">${esc(t('pdfUnit'))}</th>
+    <th class="r">${esc(t('pdfPrice'))}</th>
+    ${showD?`<th class="r">${esc(t('pdfDisc'))}</th>`:''}
+    <th class="r">${esc(t('pdfVatRate'))}</th><th class="r">${esc(t('pdfSum'))}</th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="${cols+1}" class="c">—</td></tr>`}</tbody></table>
+  <div class="totals">
+    <div class="tr"><div class="tl">${esc(t('pdfSubtotal'))}</div><div class="tv">${money(c.net)} ${esc(cy)}</div></div>
+    ${c.vatRows.filter(v=>v.rate>0).map(v=>`<div class="tr"><div class="tl">${esc(t('pdfVatSum'))} ${v.rate}%</div><div class="tv">${money(v.amt)} ${esc(cy)}</div></div>`).join('')}
+    <div class="grand"><div class="tl">${esc(t('pdfTotal'))}</div><div class="tv">${money(c.total)} ${esc(cy)}</div></div>
+    ${c.paid?`<div class="tr" style="margin-top:8px"><div class="tl">${esc(t('pdfPaid'))}</div><div class="tv">${money(c.paid)} ${esc(cy)}</div></div>
+      <div class="tr"><div class="tl"><b>${esc(t('pdfDueNow'))}</b></div><div class="tv"><b>${money(c.due)} ${esc(cy)}</b></div></div>`:''}
+  </div>
+  ${cfg.showWords?`<div class="words"><div class="wl">${esc(t('pdfWords'))}</div><b>${esc(amountWords(c.total))}</b></div>`:''}
+  ${banks.length?`<div class="bank"><div class="bl">${esc(t('setBanks'))}</div><div class="bi">
+     ${banks.map(k=>esc([k.bank,k.iban,k.swift].filter(Boolean).join('  ·  '))).join('<br>')}</div></div>`:''}
+  ${inv.notes?`<div class="remarks"><div class="rl">${esc(t('pdfNotes'))}</div>${esc(inv.notes)}</div>`:''}
+  ${cfg.showSign?`<div class="signs">
+     <div class="sig"><div class="sl">${esc(t('pdfIssued'))}</div><div class="sline"></div><div class="sn">${esc(inv.issuer||s.director||'')}</div></div>
+     <div class="sig"><div class="sl">${esc(t('pdfReceived'))}</div><div class="sline"></div><div class="sn">${esc(inv.receiver||'')}</div></div>
+   </div>`:''}
+  <div class="foot"><div>${esc(cfg.footer||'')}</div>
+    <div>${esc([s.web,s.email,s.phone].filter(Boolean).join(' · '))}</div></div>
+</div>
+<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},380)}<\/script>
+</body></html>`;
+
+  const w=window.open('','_blank');
+  if(!w){toast(t('popupBlocked'),true);return;}
+  w.document.open();w.document.write(html);w.document.close();
+}
+
+/* =========================================================================
+   Test bridge. Top-level const/let live in the global LEXICAL scope, which a
+   parent window (test.html drives the app inside an iframe) cannot reach.
+   Function declarations are already on window; this exposes the rest.
+   ========================================================================= */
+Object.defineProperties(window,{
+  S:    {get:()=>S,    set:v=>{S=v},    configurable:true},
+  EDIT: {get:()=>EDIT, set:v=>{EDIT=v}, configurable:true},
+  VIEW: {get:()=>VIEW, set:v=>{VIEW=v}, configurable:true},
+  LANG: {get:()=>LANG, configurable:true},
+  I18N: {get:()=>I18N, configurable:true},
+  REG:  {get:()=>REG,  configurable:true}
+});
+Object.assign(window,{t,esc,num,r2,uid,deacc,normQ,money,today,cur,lineNet,eurStr});
+
+/* ===================== boot ===================== */
+function boot(){
+  load();
+  setLang(detectLang());
+  LANGS.forEach(c=>{const b=$('#lang-'+c);if(b)b.onclick=()=>setLang(c);});
+  $('#btnNewTop').onclick=newInvoice;
+  $('#btnExport').onclick=exportBackup;
+  $('#btnImport').onclick=()=>$('#fileIn').click();
+  $('#fileIn').onchange=e=>{const f=e.target.files[0];if(f)importBackup(f);e.target.value='';};
+  $('#modalX').onclick=closeModal;
+  $('#scrim').onclick=e=>{if(e.target===$('#scrim'))closeModal();};
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&$('#scrim').classList.contains('on'))closeModal();
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();
+      if(VIEW==='editor'&&EDIT){if(commitInvoice()){toast(t('saved'));render();}}else{saveNow();toast(t('saved'));}}
+  });
+  const h=(location.hash||'').replace('#','');
+  go(TABS.some(x=>x.id===h&&h!=='editor')?h:'dash');
+  /* If the registry was downloaded before, bring it back silently. */
+  REG.loadIfCached().then(ok=>{if(ok&&VIEW==='settings')paintRegPanel();});
+  window.addEventListener('beforeunload',saveNow);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+</script>
+</body>
+</html>

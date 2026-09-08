@@ -1,0 +1,5 @@
+# Registry build intermediates - regenerate with tools/fetch_vat.py + tools/build_registry.py
+data/jar.csv
+data/vat.csv
+.DS_Store
+tools/e2e/shots/

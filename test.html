@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sąskaitos — tests</title>
+<style>
+ body{font-family:ui-monospace,Menlo,Consolas,monospace;background:#0f1218;color:#dfe4ec;margin:0;padding:18px;font-size:12.5px}
+ h1{font-size:15px;margin:0 0 12px}
+ .ok{color:#4ade80}.bad{color:#f87171}.info{color:#93a4bd}
+ #sum{padding:9px 12px;border-radius:8px;margin:12px 0;font-weight:700;font-size:14px}
+ #sum.pass{background:#12351f;color:#4ade80}#sum.fail{background:#3a1618;color:#f87171}
+ .grp{color:#7dd3fc;margin-top:12px}
+ iframe{position:absolute;left:-9999px;width:1200px;height:900px}
+</style></head>
+<body>
+<h1>Sąskaitos faktūros — test suite</h1>
+<div id="sum" class="info">running…</div>
+<div id="out"></div>
+<iframe id="app" src="index.html"></iframe>
+<script>
+let pass=0,fail=0;const out=document.getElementById('out');
+function line(html,cls){const d=document.createElement('div');d.className=cls||'';d.innerHTML=html;out.appendChild(d);}
+function grp(n){line('── '+n+' '+'─'.repeat(Math.max(0,52-n.length)),'grp');}
+function ok(n,cond,extra){
+  if(cond){pass++;line('  ✓ '+n,'ok');}
+  else{fail++;line('  ✗ '+n+(extra?'  <span class="info">'+extra+'</span>':''),'bad');}
+}
+function eq(n,a,b){ok(n,a===b,'got '+JSON.stringify(a)+' want '+JSON.stringify(b));}
+function near(n,a,b,eps){ok(n,Math.abs(a-b)<(eps||0.005),'got '+a+' want '+b);}
+
+const frame=document.getElementById('app');
+frame.onload=()=>setTimeout(run,320);
+
+function run(){
+  const W=frame.contentWindow,D=frame.contentDocument;
+  try{ tests(W,D); }
+  catch(e){ fail++; line('  ✗ EXCEPTION: '+e.message+'<br>'+(e.stack||'').split('\n').slice(0,4).join('<br>'),'bad'); }
+  const s=document.getElementById('sum');
+  s.className=fail?'fail':'pass';
+  s.textContent=(fail?'FAIL':'ALL_PASS')+'  —  '+pass+' passed, '+fail+' failed';
+  document.title=(fail?'FAIL ':'ALL_PASS ')+pass+'/'+(pass+fail);
+}
+
+function tests(W,D){
+  /* ---------------------------------------------------------------- */
+  grp('boot');
+  ok('app globals exist', typeof W.S==='object' && typeof W.calc==='function');
+  ok('starts on dashboard', W.VIEW==='dash');
+  ok('tab bar rendered', D.querySelectorAll('#tabbar button').length>=5);
+  ok('blank state has no invoices', W.S.invoices.length===0);
+  ok('default VAT rate is 21', W.S.settings.vatRate===21);
+
+  /* ---------------------------------------------------------------- */
+  grp('i18n');
+  W.setLang('lt');
+  eq('lt title', W.t('appTitle'), 'Sąskaitos faktūros');
+  W.setLang('en');
+  eq('en title', W.t('appTitle'), 'Invoices');
+  ok('every lt key has an en twin',
+     Object.keys(W.I18N.lt).every(k=>W.I18N.en[k]!==undefined),
+     Object.keys(W.I18N.lt).filter(k=>W.I18N.en[k]===undefined).join(','));
+  ok('every en key has a lt twin',
+     Object.keys(W.I18N.en).every(k=>W.I18N.lt[k]!==undefined),
+     Object.keys(W.I18N.en).filter(k=>W.I18N.lt[k]===undefined).join(','));
+  ok('unknown key falls back to itself', W.t('__nope__')==='__nope__');
+  W.setLang('lt');
+
+  /* ---------------------------------------------------------------- */
+  grp('money maths');
+  const L=(q,p,v,d)=>({name:'x',qty:q,price:p,vat:v,disc:d||0});
+  near('line net, no discount', W.lineNet(L(3,10,21)), 30);
+  near('line net, 10% discount', W.lineNet(L(3,10,21,10)), 27);
+  let inv={lines:[L(1,100,21)],payments:[]};
+  let c=W.calc(inv);
+  near('net', c.net, 100); near('vat 21%', c.vat, 21); near('total', c.total, 121);
+  inv={lines:[L(1,100,21),L(2,50,9)],payments:[]};
+  c=W.calc(inv);
+  near('mixed net', c.net, 200);
+  near('mixed vat', c.vat, 21+9);
+  eq('two VAT bands', c.vatRows.length, 2);
+  eq('bands sorted ascending', c.vatRows[0].rate, 9);
+  near('band base 9%', c.vatRows[0].base, 100);
+  inv={lines:[L(1,100,0)],payments:[]};
+  near('zero-rated has no VAT', W.calc(inv).vat, 0);
+  /* rounding: 3 x 33.33 @21% must not drift */
+  inv={lines:[L(3,33.33,21)],payments:[]};
+  c=W.calc(inv);
+  near('rounds to cents', c.total, 120.99);
+  /* payments */
+  inv={lines:[L(1,100,21)],payments:[{amount:50}]};
+  c=W.calc(inv);
+  near('paid', c.paid, 50); near('balance due', c.due, 71);
+
+  /* ---------------------------------------------------------------- */
+  grp('status');
+  const yday=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  const tmrw=new Date(Date.now()+864e5).toISOString().slice(0,10);
+  eq('draft stays draft', W.invStatus({status:'draft',lines:[L(1,10,21)],payments:[]}), 'draft');
+  eq('fully paid', W.invStatus({status:'sent',lines:[L(1,10,21)],payments:[{amount:12.1}]}), 'paid');
+  eq('part paid', W.invStatus({status:'sent',lines:[L(1,10,21)],payments:[{amount:5}]}), 'part');
+  eq('overdue', W.invStatus({status:'sent',dueDate:yday,lines:[L(1,10,21)],payments:[]}), 'over');
+  eq('not yet due', W.invStatus({status:'sent',dueDate:tmrw,lines:[L(1,10,21)],payments:[]}), 'sent');
+
+  /* ---------------------------------------------------------------- */
+  grp('numbering');
+  W.S.settings.series='SF';W.S.settings.format='{S}-{YYYY}-{NNNN}';
+  const yr=new Date().getFullYear();
+  eq('padded number', W.makeNumber(7), 'SF-'+yr+'-0007');
+  W.S.settings.format='{S}{YY}/{N}';
+  eq('short format', W.makeNumber(42), 'SF'+String(yr).slice(2)+'/42');
+  W.S.settings.format='{S}-{MM}-{NNN}';
+  eq('month token', W.makeNumber(5), 'SF-'+String(new Date().getMonth()+1).padStart(2,'0')+'-005');
+  W.S.settings.format='{S}-{YYYY}-{NNNN}';
+
+  /* ---------------------------------------------------------------- */
+  grp('amount in words (LT)');
+  W.setLang('lt');
+  eq('1',      W.amountWords(1),      'Vienas euras 00 ct');
+  eq('2',      W.amountWords(2),      'Du eurai 00 ct');
+  eq('10',     W.amountWords(10),     'Dešimt eurų 00 ct');
+  eq('11',     W.amountWords(11),     'Vienuolika eurų 00 ct');
+  eq('21',     W.amountWords(21),     'Dvidešimt vienas euras 00 ct');
+  eq('100',    W.amountWords(100),    'Šimtas eurų 00 ct');
+  eq('200',    W.amountWords(200),    'Du šimtai eurų 00 ct');
+  eq('1000',   W.amountWords(1000),   'Tūkstantis eurų 00 ct');
+  eq('1001',   W.amountWords(1001),   'Tūkstantis vienas euras 00 ct');
+  eq('1000000',W.amountWords(1000000),'Milijonas eurų 00 ct');
+  eq('2000',   W.amountWords(2000),   'Du tūkstančiai eurų 00 ct');
+  eq('11000',  W.amountWords(11000),  'Vienuolika tūkstančių eurų 00 ct');
+  eq('cents',  W.amountWords(1234.56),'Tūkstantis du šimtai trisdešimt keturi eurai 56 ct');
+  eq('zero',   W.amountWords(0),      'Nulis eurų 00 ct');
+  W.setLang('en');
+  eq('en 1',    W.amountWords(1),    'One euro 00 cents');
+  eq('en 1234', W.amountWords(1234.5),'One thousand two hundred and thirty-four euros 50 cents');
+  W.setLang('lt');
+
+  /* ---------------------------------------------------------------- */
+  grp('helpers');
+  eq('deacc folds Lithuanian', W.deacc('ąčęėįšųūž'), 'aceeisuuz');
+  eq('normQ lowercases + folds', W.normQ('UAB Ąžuolas'), 'uab azuolas');
+  eq('deacc keeps length', W.deacc('šiaulių').length, 'šiaulių'.length);
+  eq('slug', W.slug('UAB "Ąžuolas" ir Ko'), 'uab-azuolas-ir-ko');
+  eq('num accepts comma', W.num('12,50'), 12.5);
+  eq('num on junk is 0', W.num('abc'), 0);
+  eq('addDays', W.addDays('2026-01-30',2), '2026-02-01');
+  eq('addDays over a year end', W.addDays('2026-12-31',1), '2027-01-01');
+  eq('addDays leap day', W.addDays('2028-02-28',1), '2028-02-29');
+  eq('daysBetween', W.daysBetween('2026-01-01','2026-01-15'), 14);
+  eq('esc escapes', W.esc('<b>&"'), '&lt;b&gt;&amp;&quot;');
+
+  /* ---------------------------------------------------------------- */
+  grp('invoice lifecycle');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.next=1;
+  W.newInvoice();
+  ok('editor opened', W.VIEW==='editor' && !!W.EDIT);
+  eq('number assigned', W.EDIT.no, 'SF-'+yr+'-0001');
+  eq('one blank line', W.EDIT.lines.length, 1);
+  ok('save refused without buyer', W.commitInvoice()===false);
+  const cust={id:'c1',kind:'company',name:'UAB Bandymas',code:'123456789',vat:'LT123456715',address:'Vilnius'};
+  W.S.customers.push(cust);
+  W.setBuyer(cust);
+  eq('buyer snapshot name', W.EDIT.buyer.name, 'UAB Bandymas');
+  eq('customerId linked', W.EDIT.customerId, 'c1');
+  ok('save refused without lines', W.commitInvoice()===false);
+  W.EDIT.lines=[{id:'l1',name:'Baldų gamyba',qty:2,unit:'vnt',price:250,disc:0,vat:21}];
+  ok('save accepted', W.commitInvoice()===true);
+  eq('stored', W.S.invoices.length, 1);
+  eq('next number advanced', W.S.settings.next, 2);
+  near('stored total', W.calc(W.S.invoices[0]).total, 605);
+  /* editing an existing invoice must update, not append */
+  const id=W.S.invoices[0].id;
+  W.openInvoice(id);
+  W.EDIT.lines[0].qty=3;
+  W.commitInvoice();
+  eq('still one invoice', W.S.invoices.length, 1);
+  near('updated total', W.calc(W.S.invoices[0]).total, 907.5);
+  /* duplicate */
+  W.duplicateInvoice();
+  eq('duplicate is a draft', W.EDIT.status, 'draft');
+  ok('duplicate got a new number', W.EDIT.no!=='SF-'+yr+'-0001');
+  ok('duplicate has no payments', W.EDIT.payments.length===0);
+  ok('duplicate not stored until saved', W.S.invoices.length===1);
+  W.commitInvoice();
+  eq('now two invoices', W.S.invoices.length, 2);
+  /* catalogue usage must count once per invoice, not once per save */
+  W.S.items=[{id:'it1',name:'Montavimas',unit:'val',price:35,vat:21,used:0}];
+  W.newInvoice(); W.setBuyer(cust);
+  W.EDIT.lines=[{id:'z',name:'Montavimas',qty:1,unit:'val',price:35,disc:0,vat:21,itemId:'it1'}];
+  W.commitInvoice(); W.commitInvoice(); W.commitInvoice();
+  eq('usage counted once across three saves', W.S.items[0].used, 1);
+  W.S.invoices.pop(); W.S.items=[];
+
+  /* ---------------------------------------------------------------- */
+  grp('persistence');
+  W.saveNow();
+  const raw=JSON.parse(W.localStorage.getItem('inv_state_v1'));
+  eq('localStorage has both invoices', raw.invoices.length, 2);
+  eq('localStorage has the customer', raw.customers.length, 1);
+
+  /* ---------------------------------------------------------------- */
+  grp('exports');
+  const xml=[];
+  const realDl=W.download;
+  W.download=(n,txt)=>xml.push([n,txt]);
+  W.exportUbl(W.S.invoices[0]);
+  ok('UBL file name', xml.length===1 && /\.xml$/.test(xml[0][0]));
+  const x=xml[0][1];
+  ok('UBL declares EN16931', x.includes('urn:cen.eu:en16931:2017'));
+  ok('UBL carries the buyer VAT id', x.includes('LT123456715'));
+  ok('UBL total matches', x.includes('<cbc:PayableAmount currencyID="EUR">907.50'));
+  ok('UBL has one line per invoice line', (x.match(/<cac:InvoiceLine>/g)||[]).length===1);
+  ok('UBL is well-formed XML',
+     !new DOMParser().parseFromString(x,'application/xml').querySelector('parsererror'));
+  xml.length=0;
+  W.exportCsv(W.S.invoices);
+  ok('CSV produced', xml.length===1 && /\.csv$/.test(xml[0][0]));
+  ok('CSV is semicolon separated with a BOM', xml[0][1].startsWith('﻿"Nr"'));
+  eq('CSV row count', xml[0][1].trim().split('\r\n').length, 3);
+  xml.length=0;
+  W.exportBackup();
+  ok('backup is valid JSON', (()=>{try{JSON.parse(xml[0][1]);return true}catch(e){return false}})());
+  W.download=realDl;
+
+  /* ---------------------------------------------------------------- */
+  grp('registry');
+  ok('REG module present', typeof W.REG==='object' && typeof W.REG.search==='function');
+  eq('search before load is empty', W.REG.search('uab',5).length, 0);
+  /* drive the line-offset + scoring logic on a synthetic blob */
+  const fake='123456789\tUAB Ąžuolas\tVilnius, Gedimino pr. 1\tLT123456715\tUAB\t\n'+
+             '987654321\tMB Beržas\tKaunas, Laisvės al. 2\t\tMB\t\n'+
+             '555000111\tUAB Ąžuolyno baldai\tŠiauliai, Tilžės g. 3\tLT555000113\tUAB\tLikviduojamas';
+  W.REG.text=fake;
+  W.REG.norm=W.deacc(fake.toLowerCase());
+  W.REG.offT=W.REG._offsets(W.REG.text);
+  W.REG.offN=W.REG._offsets(W.REG.norm);
+  W.REG.lines=W.REG.offT.length-1;
+  W.REG.state='ready';
+  eq('parses a row name', W.REG.row(0).name, 'UAB Ąžuolas');
+  eq('parses a row vat',  W.REG.row(0).vat,  'LT123456715');
+  eq('parses last row status', W.REG.row(2).status, 'Likviduojamas');
+  let hits=W.REG.search('azuol',10);
+  eq('diacritic-insensitive search finds both', hits.length, 2);
+  eq('shorter exact name ranks first', hits[0].name, 'UAB Ąžuolas');
+  hits=W.REG.search('Ąžuol',10);
+  eq('accented query also works', hits.length, 2);
+  eq('full name still matches one', W.REG.search('azuolas',10).length, 1);
+  hits=W.REG.search('123456789',10);
+  eq('company code lookup', hits.length, 1);
+  eq('code lookup returns the right row', hits[0].name, 'UAB Ąžuolas');
+  hits=W.REG.search('kaunas',10);
+  eq('address search works', hits.length, 1);
+  eq('two-char query is ignored', W.REG.search('ua',10).length, 0);
+  hits=W.REG.search('berzas',10);
+  const c2=W.customerFromRegistry(hits[0]);
+  eq('registry -> customer name', c2.name, 'MB Beržas');
+  eq('registry -> customer kind', c2.kind, 'company');
+  const flagged=W.customerFromRegistry(W.REG.row(2));
+  ok('liquidation warning carried into the note', /Likviduojamas/.test(flagged.note));
+  W.REG.state='idle';W.REG.text='';W.REG.norm='';
+
+  /* ---------------------------------------------------------------- */
+  grp('rendering');
+  W.S.invoices=[];W.S.customers=[];W.EDIT=null;W.saveNow();
+  ['dash','invoices','customers','items','settings'].forEach(v=>{
+    W.go(v);
+    ok('renders '+v, D.querySelector('#p-'+v).innerHTML.length>200);
+  });
+  W.go('dash');
+  ok('dashboard nudges to fill in seller details', !!D.querySelector('#dashSetupBtn'));
+  W.S.seller.name='Mano Įmonė UAB';W.go('dash');
+  ok('nudge disappears once named', !D.querySelector('#dashSetupBtn'));
+  W.newInvoice();
+  ok('editor renders a buyer search box', !!D.querySelector('#buyerQ'));
+  ok('editor renders the line table', !!D.querySelector('#linesBody tr'));
+  ok('totals block rendered', D.querySelector('#edTotals').innerHTML.includes('0,00')
+     || D.querySelector('#edTotals').innerHTML.includes('0.00'));
+  W.EDIT=null;W.go('dash');
+
+  /* clean up so a manual visit to index.html starts fresh */
+  W.localStorage.removeItem('inv_state_v1');
+}
+</script>
+</body></html>
