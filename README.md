@@ -3,6 +3,8 @@
 Single-file invoicing app for a Lithuanian company. Zero build, zero backend —
 open `index.html` and everything lives in `localStorage`.
 
+**Live: https://gervdalius-droid.github.io/invoices/**
+
 Same shell and design language as the other CraftOS apps (`offer`, `shopflow`):
 dark sticky header, sticky tab strip, cards, LT/EN toggle sharing the
 `fab_lang` key.
@@ -11,6 +13,11 @@ dark sticky header, sticky tab strip, cards, LT/EN toggle sharing the
 python3 serve.py            # http://localhost:8741/
 python3 serve.py 9000       # any other port
 ```
+
+The hosted copy is the same files served from `main` by GitHub Pages — pushing
+to `main` redeploys it. `cloud-config.js` is git-ignored, so the hosted app asks
+for the cloud connection instead of pre-filling it (its `<script>` tag 404s
+harmlessly and is caught by `onerror`).
 
 ## What it does
 
