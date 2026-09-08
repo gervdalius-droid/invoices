@@ -30,7 +30,7 @@ harmlessly and is caught by `onerror`).
 | **Važtaraštis** | the waybill editor — three parties, route, vehicle, driver, cargo |
 | **Pirkėjai** | customers, manual or straight from the company registry |
 | **Prekės ir paslaugos** | catalogue of what you sell, dropped into an invoice with one click |
-| **Nustatymai** | seller details, logo, bank accounts, numbering, defaults, backup |
+| **Nustatymai** | seller details, logo, bank accounts, numbering, defaults, import/export, backup |
 
 Document types: **PVM sąskaita faktūra**, **Sąskaita faktūra** (non-VAT payer),
 **Išankstinė sąskaita**, **Kreditinė sąskaita**.
@@ -47,6 +47,51 @@ register, line-level, customers, catalogue, waybill register) and every invoice
 as standalone HTML plus UBL XML, and every waybill as standalone HTML. The archive is built in the browser with a hand-rolled ZIP writer
 (`CompressionStream('deflate-raw')`, stored fallback); a test reads the central
 directory back out of the produced blob.
+
+## Exporting a period
+
+Settings (or the invoice list) → **Eksportuoti laikotarpį**. Pick this/last
+month, this/last week, this quarter, this/last year, or custom dates; tick which
+document types count; filter by paid / unpaid / draft; optionally fold in the
+važtaraščiai for the same dates. A live summary shows the document count, net,
+VAT and total before you commit to anything.
+
+Three ways out: **PDF** (one print document, one invoice per page, using your
+own template), **ZIP** (a CSV register plus every document as HTML and UBL XML),
+or **CSV**.
+
+## Importing from another app
+
+Settings → **Importuoti sąskaitas**. It **merges** — nothing is deleted, and
+invoice numbers you already hold are skipped, so re-running the same file is
+safe. It accepts this app's own backup, a generic CSV, and the JSON produced by
+`tools/import_pdf.py`. Buyers become customers (deduplicated by company code,
+then by name), and the preview shows exactly what will land before you confirm.
+
+Ticking **"Tęsti numeraciją nuo importuotų"** carries the old run forward: the
+series, the next number *and the number's shape* are inferred from the file, so
+after importing a book ending at `DBSF 0002943` the next invoice you write is
+`DBSF 0002944` rather than restarting in this app's default format.
+
+### Invoice books that only exist as PDF
+
+`tools/import_pdf.py` converts a printed invoice book into that JSON:
+
+```bash
+python3 -m pip install pdfminer.six
+python3 tools/import_pdf.py BOOK.pdf -o import.json
+```
+
+It reads the PDF as individual glyphs with coordinates and rebuilds the rows and
+columns, because the plain text layer runs values together — `…persirengimui4vnt494.00 €`
+— and the split between a description ending in digits and the quantity is
+genuinely ambiguous there. Column positions are read from **each page's own
+header row**, since the generator auto-sizes the table per page. Descriptions
+that wrap inside their cell are stitched back together.
+
+Every page is checked against its own arithmetic (qty × price = line net, line
+nets = stated net, net + VAT = total) and anything that fails is reported and
+left out rather than imported quietly.
 
 ## Invoice appearance
 
@@ -166,7 +211,7 @@ of querying them live from the browser.
 
 ```bash
 python3 serve.py &
-open http://localhost:8741/test.html        # 287 in-browser assertions
+open http://localhost:8741/test.html        # 354 in-browser assertions
 python3 tools/e2e/e2e.py                    # headless Chrome, real registry
 ```
 
@@ -200,6 +245,8 @@ land in `tools/e2e/shots/`.
 - Do **not** reset test state with `localStorage.clear()` + reload: the app saves
   on `beforeunload`, so the reload writes the old state straight back. Use
   `adopt({}); saveNow()` instead — `tools/e2e/e2e.py` does.
+- `formatNo()` expands any `{N…}` run, so `{NNNNNNN}` works; `inferFormat()`
+  derives that shape from an imported number.
 - Waybill drivers are a list (`w.drivers[]`). `wbDrivers()` also reads a legacy
   single `driver`/`driverDoc` document, so never touch those fields directly.
 - Invoices and važtaraščiai keep **separate counters** (`next` / `wbNext`) and

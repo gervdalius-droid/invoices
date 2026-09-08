@@ -3,3 +3,6 @@ data/jar.csv
 data/vat.csv
 .DS_Store
 tools/e2e/shots/
+
+# Converted invoice books (client data)
+*-import.json

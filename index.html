@@ -198,6 +198,11 @@
   .brand-toggles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px}
   @media(max-width:560px){.brand-toggles{grid-template-columns:minmax(0,1fr)}}
 
+  .drop{border:2px dashed var(--line2);border-radius:11px;padding:26px 18px;text-align:center;
+        cursor:pointer;background:#fbfcfe;transition:.15s}
+  .drop:hover,.drop.over{border-color:var(--acc);background:#eef3ff}
+  .drop .big{font-size:14px;font-weight:600;margin-bottom:4px}
+
   /* ---------- progress ---------- */
   .prog{height:7px;background:var(--chip);border-radius:20px;overflow:hidden;margin-top:8px}
   .prog i{display:block;height:100%;background:var(--acc);width:0;transition:width .18s ease}
@@ -513,6 +518,36 @@ const I18N={
   setDriverName:"Vardas, pavardė",setDriverDoc:"Pažymėjimo Nr.",
   wbPick:"Pasirinkti",
   kpiToDeliver:"Neišvežta",kpiToDeliverSub:"važtaraščių laukia",
+
+  /* period export */
+  expTitle:"Eksportuoti laikotarpį",
+  expPeriod:"Laikotarpis",expTypes:"Dokumentų tipai",expStatus:"Būsena",
+  perThisMonth:"Šis mėnuo",perLastMonth:"Praėjęs mėnuo",perThisWeek:"Ši savaitė",
+  perLastWeek:"Praėjusi savaitė",perThisQuarter:"Šis ketvirtis",perThisYear:"Šie metai",
+  perLastYear:"Praėję metai",perAll:"Visos",perCustom:"Pasirinkti datas",
+  expFrom:"Nuo",expTo:"Iki",expRange:"Laikotarpis",
+  expUnpaid:"Neapmokėtos",expWithWaybills:"Įtraukti važtaraščius",
+  expCount:"Dokumentų",expNothing:"Pasirinktame laikotarpyje dokumentų nėra",
+  setPeriodExport:"⬇ Eksportuoti laikotarpį (PDF)",
+  setPeriodExportSub:"Mėnuo, savaitė, metai ar pasirinktos datos — viena PDF byla",
+
+  /* import */
+  impTitle:"Importuoti sąskaitas",
+  impHint:"Sąskaitos pridedamos prie esamų — nieko neištrinama. Tokie patys numeriai praleidžiami.",
+  impDrop:"Vilkite failą arba spustelėkite",
+  impFormats:"JSON (atsarginė kopija arba tools/import_pdf.py rezultatas) · CSV",
+  impNew:"Naujos sąskaitos",impCustomers:"Nauji pirkėjai",impCustomersSub:"bus sukurti",
+  impDupes:"Praleista (jau yra)",impMore:"dar",
+  impAdopt:"Tęsti numeraciją nuo importuotų",
+  impMarkPaid:"Pažymėti visas kaip apmokėtas",
+  impMarkedPaid:"Importuota kaip apmokėta",
+  impGo:"Importuoti",impDone:"Importuota sąskaitų:",impRead:"Faile rasta sąskaitų:",
+  impBadJson:"Netinkamas JSON failas",
+  impNoInvoices:"Faile sąskaitų nerasta",
+  impNoColumn:"CSV neturi numerio stulpelio (Nr.)",
+  impLineFallback:"Prekės ir paslaugos",
+  setImportInvoices:"⬆ Importuoti sąskaitas",
+  setImportInvoicesSub:"Iš kitos programos — JSON arba CSV, duomenys sujungiami",
   copyOf:"kopija"
  },
  en:{
@@ -706,6 +741,36 @@ const I18N={
   setDriverName:"Name",setDriverDoc:"Licence no.",
   wbPick:"Pick",
   kpiToDeliver:"To deliver",kpiToDeliverSub:"waybills waiting",
+
+  /* period export */
+  expTitle:"Export a period",
+  expPeriod:"Period",expTypes:"Document types",expStatus:"Status",
+  perThisMonth:"This month",perLastMonth:"Last month",perThisWeek:"This week",
+  perLastWeek:"Last week",perThisQuarter:"This quarter",perThisYear:"This year",
+  perLastYear:"Last year",perAll:"All",perCustom:"Pick dates",
+  expFrom:"From",expTo:"To",expRange:"Range",
+  expUnpaid:"Unpaid",expWithWaybills:"Include waybills",
+  expCount:"Documents",expNothing:"Nothing in the selected period",
+  setPeriodExport:"⬇ Export a period (PDF)",
+  setPeriodExportSub:"Month, week, year or custom dates — one PDF",
+
+  /* import */
+  impTitle:"Import invoices",
+  impHint:"Invoices are added to what you have — nothing is deleted. Numbers you already hold are skipped.",
+  impDrop:"Drop a file or click",
+  impFormats:"JSON (a backup, or the output of tools/import_pdf.py) · CSV",
+  impNew:"New invoices",impCustomers:"New customers",impCustomersSub:"will be created",
+  impDupes:"Skipped (already here)",impMore:"more",
+  impAdopt:"Continue numbering from the imported run",
+  impMarkPaid:"Mark them all as paid",
+  impMarkedPaid:"Imported as paid",
+  impGo:"Import",impDone:"Invoices imported:",impRead:"Invoices found in the file:",
+  impBadJson:"Not valid JSON",
+  impNoInvoices:"No invoices found in that file",
+  impNoColumn:"The CSV has no number column (Nr.)",
+  impLineFallback:"Goods and services",
+  setImportInvoices:"⬆ Import invoices",
+  setImportInvoicesSub:"From another app — JSON or CSV, merged into what you have",
   copyOf:"copy"
  }
 };
@@ -1112,10 +1177,8 @@ function formatNo(fmt,series,n){
     .replace(/\{YYYY\}/g,String(d.getFullYear()))
     .replace(/\{YY\}/g,String(d.getFullYear()).slice(2))
     .replace(/\{MM\}/g,String(d.getMonth()+1).padStart(2,'0'))
-    .replace(/\{NNNNN\}/g,String(n).padStart(5,'0'))
-    .replace(/\{NNNN\}/g,String(n).padStart(4,'0'))
-    .replace(/\{NNN\}/g,String(n).padStart(3,'0'))
-    .replace(/\{N\}/g,String(n));
+    /* one rule for the whole {N} ladder, so {NNNNNNN} works too */
+    .replace(/\{(N+)\}/g,(_,g)=>String(n).padStart(g.length,'0'));
 }
 function makeNumber(seq){
   const s=S.settings;
@@ -1505,6 +1568,7 @@ function renderInvoices(){
       ${years.map(y=>`<option value="${y}" ${invFilter.year===y?'selected':''}>${y}</option>`).join('')}</select>
     <div class="grow"></div>
     <span class="pill mono">${list.length} · ${money(tot)} ${esc(cur())}</span>
+    <button class="btn sm" id="invPeriod">${esc(t('expTitle'))}</button>
     <button class="btn sm" id="invCsv">${esc(t('exportCsv'))}</button>
     <button class="btn sm primary" id="invNew">＋ ${esc(t('newInvoice'))}</button>
   </div>
@@ -1518,6 +1582,7 @@ function renderInvoices(){
   $$('#p-invoices [data-fs]').forEach(b=>b.onclick=()=>{invFilter.status=b.dataset.fs;renderInvoices();});
   $('#invYear').onchange=e=>{invFilter.year=e.target.value;renderInvoices();};
   $('#invNew').onclick=newInvoice;
+  $('#invPeriod').onclick=periodModal;
   $('#invCsv').onclick=()=>exportCsv(list);
   bindInvRows($('#p-invoices'));
 }
@@ -2893,7 +2958,15 @@ function renderSettings(){
       <span class="muted">${esc(t('setDataSub'))}</span></div>
     <div class="body">
       <div class="btnrow">
-        <button class="btn primary" id="setExpAll">${esc(t('setExportAll'))}</button>
+        <button class="btn primary" id="setPeriod">${esc(t('setPeriodExport'))}</button>
+        <span class="muted">${esc(t('setPeriodExportSub'))}</span>
+      </div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn" id="setImpInv">${esc(t('setImportInvoices'))}</button>
+        <span class="muted">${esc(t('setImportInvoicesSub'))}</span>
+      </div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn" id="setExpAll">${esc(t('setExportAll'))}</button>
         <span class="muted">${esc(t('setExportAllSub'))}</span>
       </div>
       <div class="btnrow" style="margin-top:12px">
@@ -2941,6 +3014,8 @@ function renderSettings(){
     rd.readAsDataURL(f);
   };
   const ld=$('#logoDel');if(ld)ld.onclick=()=>{S.seller.logo='';saveNow();renderSettings();};
+  $('#setPeriod').onclick=periodModal;
+  $('#setImpInv').onclick=importModal;
   $('#setExpAll').onclick=()=>{
     const btn=$('#setExpAll');btn.disabled=true;btn.textContent=t('exportWorking');
     exportEverything().catch(e=>toast(String(e.message||e),true))
@@ -3070,6 +3145,445 @@ function drawPreview(){
   previewTimer=setTimeout(()=>{
     try{fr.srcdoc=invoiceHtml(sampleInvoice(),{standalone:true});}catch(e){}
   },120);
+}
+
+/* =========================================================================
+   Period export — pick a month / week / year / custom range plus document
+   types, then take the lot out as one PDF, a ZIP or a CSV.
+   ========================================================================= */
+function weekStart(d){
+  const x=new Date(d+'T00:00:00Z');
+  const dow=(x.getUTCDay()+6)%7;           /* Monday = 0, the Lithuanian week */
+  x.setUTCDate(x.getUTCDate()-dow);
+  return x.toISOString().slice(0,10);
+}
+function monthStart(iso){return iso.slice(0,8)+'01';}
+function addMonths(iso,n){
+  const x=new Date(iso+'T00:00:00Z');
+  x.setUTCMonth(x.getUTCMonth()+n);
+  return x.toISOString().slice(0,10);
+}
+function periodRange(kind){
+  const now=today();
+  switch(kind){
+    case 'thisWeek':  return {from:weekStart(now),to:addDays(weekStart(now),6)};
+    case 'lastWeek':  return {from:addDays(weekStart(now),-7),to:addDays(weekStart(now),-1)};
+    case 'thisMonth': return {from:monthStart(now),to:addDays(addMonths(monthStart(now),1),-1)};
+    case 'lastMonth': {const m=addMonths(monthStart(now),-1);
+                       return {from:m,to:addDays(addMonths(m,1),-1)};}
+    case 'thisQuarter':{const q=Math.floor(new Date(now+'T00:00:00Z').getUTCMonth()/3)*3;
+                        const f=now.slice(0,5)+String(q+1).padStart(2,'0')+'-01';
+                        return {from:f,to:addDays(addMonths(f,3),-1)};}
+    case 'thisYear':  return {from:now.slice(0,4)+'-01-01',to:now.slice(0,4)+'-12-31'};
+    case 'lastYear':  {const y=+now.slice(0,4)-1;return {from:y+'-01-01',to:y+'-12-31'};}
+    default:          return {from:'',to:''};
+  }
+}
+const PERIODS=[['thisMonth','perThisMonth'],['lastMonth','perLastMonth'],
+               ['thisWeek','perThisWeek'],['lastWeek','perLastWeek'],
+               ['thisQuarter','perThisQuarter'],['thisYear','perThisYear'],
+               ['lastYear','perLastYear'],['all','perAll']];
+
+let EXP={kind:'thisMonth',from:'',to:'',types:{invoice:true,simple:true,proforma:true,credit:true},
+         status:'all',waybills:false};
+
+function expMatch(){
+  const r=EXP.kind==='custom'?{from:EXP.from,to:EXP.to}
+        :EXP.kind==='all'?{from:'',to:''}:periodRange(EXP.kind);
+  const inRange=d=>(!r.from||d>=r.from)&&(!r.to||d<=r.to);
+  const inv=S.invoices.filter(i=>EXP.types[i.type]!==false&&inRange(i.date||'')&&(
+    EXP.status==='all'||
+    (EXP.status==='unpaid'&&calc(i).due>0.005&&i.status!=='draft')||
+    (EXP.status==='paid'&&calc(i).due<=0.005&&i.status!=='draft')||
+    (EXP.status==='draft'&&i.status==='draft')
+  )).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.seq||0)-(b.seq||0));
+  const wbs=EXP.waybills?S.waybills.filter(w=>inRange(w.date||''))
+                                   .sort((a,b)=>(a.date||'').localeCompare(b.date||'')):[];
+  return {range:r,invoices:inv,waybills:wbs};
+}
+/* One print document, one invoice per page. */
+function periodDocHtml(inv,wbs){
+  const br=Object.assign(blankBrand(),S.brand||{});
+  const parts=inv.map(i=>invoiceHtml(i,{fragment:true}))
+             .concat(wbs.map(w=>waybillHtml(w,{fragment:true})));
+  return `<!DOCTYPE html><html lang="${LANG}"><head><meta charset="utf-8">
+<title>${esc(t('expTitle'))} ${esc(EXP.from||'')}${EXP.to?'–'+esc(EXP.to):''}</title>
+<style>${brandCss(br)}
+.parties.three{grid-template-columns:repeat(3,1fr);gap:10px}
+.parties.three .pn{font-size:12.5px}.parties.three .pv{font-size:10px;line-height:1.6}
+.fields{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:0 0 18px}
+.fld{border:1px solid #e6e8ed;border-radius:9px;padding:8px 11px;min-width:0}
+.fl{font-size:8.5px;text-transform:uppercase;letter-spacing:.08em;color:#9aa3b2;font-weight:700}
+.fv{font-size:11.5px;margin-top:2px;word-break:break-word}
+.signs.three{grid-template-columns:repeat(3,1fr);gap:18px}
+.signs.three .sl{font-size:8.5px}
+.sheet{page-break-after:always;break-after:page}
+.sheet:last-child{page-break-after:auto;break-after:auto}
+</style></head><body>
+<div class="noprint"><button onclick="window.print()">${esc(t('pdfPrintSave'))}</button></div>
+${parts.map(p=>`<div class="sheet">${p}</div>`).join('')}
+<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},420)}<\/script>
+</body></html>`;
+}
+function exportPeriodPdf(){
+  const m=expMatch();
+  if(!m.invoices.length&&!m.waybills.length){toast(t('expNothing'),true);return;}
+  const w=window.open('','_blank');
+  if(!w){toast(t('popupBlocked'),true);return;}
+  w.document.open();w.document.write(periodDocHtml(m.invoices,m.waybills));w.document.close();
+}
+function periodLabel(){
+  const m=expMatch();
+  if(EXP.kind==='all')return 'visos';
+  return (m.range.from||'')+(m.range.to?'_'+m.range.to:'');
+}
+function exportPeriodCsv(){
+  const m=expMatch();
+  if(!m.invoices.length){toast(t('expNothing'),true);return;}
+  exportCsv(m.invoices,`saskaitos-${slug(periodLabel())}.csv`);
+}
+async function exportPeriodZip(){
+  const m=expMatch();
+  if(!m.invoices.length&&!m.waybills.length){toast(t('expNothing'),true);return;}
+  const root=`saskaitos-${slug(periodLabel())}/`,files=[];
+  files.push({name:root+'saskaitos.csv',text:invoiceCsv(m.invoices)});
+  m.invoices.forEach(i=>{
+    const fn=slug(i.no||i.id);
+    files.push({name:root+'saskaitos/'+fn+'.html',text:invoiceHtml(i,{standalone:true})});
+    files.push({name:root+'xml/'+fn+'.xml',text:ublXml(i)});
+  });
+  m.waybills.forEach(w=>files.push({
+    name:root+'vaztarasciai/'+slug(w.no||w.id)+'.html',text:waybillHtml(w,{standalone:true})}));
+  const blob=await makeZip(files);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=`saskaitos-${slug(periodLabel())}.zip`;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},600);
+  toast(t('exportAllDone')+' · '+files.length+' '+t('exportFiles'));
+  return files;
+}
+
+function periodModal(){
+  const draw=()=>{
+    const m=expMatch();
+    const tot=r2(m.invoices.reduce((s,i)=>s+calc(i).total,0));
+    const net=r2(m.invoices.reduce((s,i)=>s+calc(i).net,0));
+    const vat=r2(m.invoices.reduce((s,i)=>s+calc(i).vat,0));
+    $('#modalBody').innerHTML=`
+      <div class="sect-title">${esc(t('expPeriod'))}</div>
+      <div class="btnrow" style="margin-bottom:12px">
+        ${PERIODS.map(([k,l])=>`<button class="btn sm ${EXP.kind===k?'primary':''}" data-per="${k}">${esc(t(l))}</button>`).join('')}
+        <button class="btn sm ${EXP.kind==='custom'?'primary':''}" data-per="custom">${esc(t('perCustom'))}</button>
+      </div>
+      ${EXP.kind==='custom'?`<div class="grid2" style="margin-bottom:12px">
+        <label class="f"><span class="l">${esc(t('expFrom'))}</span><input type="date" id="expFrom" value="${esc(EXP.from)}"></label>
+        <label class="f"><span class="l">${esc(t('expTo'))}</span><input type="date" id="expTo" value="${esc(EXP.to)}"></label>
+      </div>`:`<div class="note" style="margin-bottom:12px">${esc(t('expRange'))}:
+        <b class="mono">${esc(m.range.from||'…')} → ${esc(m.range.to||'…')}</b></div>`}
+
+      <div class="sect-title">${esc(t('expTypes'))}</div>
+      <div class="brand-toggles" style="margin-bottom:12px">
+        ${DOC_TYPES.map(([k,l])=>`<label class="inline-check"><input type="checkbox" data-ety="${k}" ${EXP.types[k]!==false?'checked':''}> <span>${esc(t(l))}</span></label>`).join('')}
+      </div>
+
+      <div class="sect-title">${esc(t('expStatus'))}</div>
+      <div class="btnrow" style="margin-bottom:12px">
+        ${[['all','invAll'],['unpaid','expUnpaid'],['paid','invPaid'],['draft','invDraft']]
+          .map(([k,l])=>`<button class="btn sm ${EXP.status===k?'primary':''}" data-est="${k}">${esc(t(l))}</button>`).join('')}
+      </div>
+      <label class="inline-check" style="margin-bottom:14px">
+        <input type="checkbox" id="expWb" ${EXP.waybills?'checked':''}> <span>${esc(t('expWithWaybills'))}</span></label>
+
+      <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div class="kpi"><div class="kl">${esc(t('expCount'))}</div><div class="kv">${m.invoices.length}</div>
+          <div class="ks">${EXP.waybills?m.waybills.length+' '+esc(t('tabWaybills').toLowerCase()):'&nbsp;'}</div></div>
+        <div class="kpi"><div class="kl">${esc(t('edSubtotal'))}</div><div class="kv">${money(net)}</div>
+          <div class="ks">${esc(t('edVat'))} ${money(vat)}</div></div>
+        <div class="kpi ok"><div class="kl">${esc(t('colTotal'))}</div><div class="kv">${money(tot)}</div>
+          <div class="ks">${esc(cur())}</div></div>
+      </div>`;
+    $$('#modalBody [data-per]').forEach(b=>b.onclick=()=>{
+      EXP.kind=b.dataset.per;
+      if(EXP.kind==='custom'&&!EXP.from){const r=periodRange('thisMonth');EXP.from=r.from;EXP.to=r.to;}
+      draw();});
+    $$('#modalBody [data-ety]').forEach(c=>c.onchange=()=>{EXP.types[c.dataset.ety]=c.checked;draw();});
+    $$('#modalBody [data-est]').forEach(b=>b.onclick=()=>{EXP.status=b.dataset.est;draw();});
+    const wb=$('#expWb');if(wb)wb.onchange=()=>{EXP.waybills=wb.checked;draw();};
+    const f=$('#expFrom'),tt=$('#expTo');
+    if(f)f.onchange=()=>{EXP.from=f.value;draw();};
+    if(tt)tt.onchange=()=>{EXP.to=tt.value;draw();};
+  };
+  openModal(t('expTitle'),'',
+    `<button class="btn" data-mclose>${esc(t('close'))}</button>
+     <button class="btn" id="expCsv">CSV</button>
+     <button class="btn" id="expZip">ZIP</button>
+     <button class="btn primary" id="expPdf">${esc(t('edPdf'))}</button>`,
+    ()=>{
+      draw();
+      $('#expPdf').onclick=exportPeriodPdf;
+      $('#expCsv').onclick=exportPeriodCsv;
+      $('#expZip').onclick=()=>{
+        const b=$('#expZip');b.disabled=true;b.textContent=t('exportWorking');
+        exportPeriodZip().catch(e=>toast(String(e.message||e),true))
+          .finally(()=>{b.disabled=false;b.textContent='ZIP';});
+      };
+    });
+}
+
+/* =========================================================================
+   Importing invoices from another app.
+
+   MERGES rather than replaces: existing invoices are matched by number and
+   left alone, buyers become customers, and the numbering can be carried over
+   so the next invoice continues the old sequence instead of restarting.
+
+   Accepts this app's own backup, the JSON that tools/import_pdf.py produces
+   from a printed invoice book, and a generic CSV.
+   ========================================================================= */
+const IMPORT_ALIASES={
+  no:['nr','no','numeris','number','saskaitos nr','saskaitos numeris','invoice','dokumentas'],
+  date:['data','date','saskaitos data','issue date','israsymo data'],
+  due:['terminas','apmoketi iki','due','due date','apmokejimo terminas'],
+  buyer:['pirkejas','buyer','klientas','customer','gavejas'],
+  code:['imones kodas','im kodas','kodas','company code','reg no'],
+  vat:['pvm kodas','pvm moketojo kodas','vat','vat no'],
+  address:['adresas','address'],
+  item:['pavadinimas','preke','paslauga','description','item'],
+  qty:['kiekis','qty','quantity'],
+  unit:['matas','mato vnt','vnt','unit'],
+  price:['kaina','kaina be pvm','price','vieneto kaina'],
+  net:['suma be pvm','net','suma'],
+  rate:['pvm %','pvm proc','vat %','tarifas'],
+  total:['viso','bendra suma','is viso','total','viso su pvm']
+};
+function csvRows(text){
+  text=text.replace(/^﻿/,'');
+  const delim=(text.split('\n')[0].match(/;/g)||[]).length>=(text.split('\n')[0].match(/,/g)||[]).length?';':',';
+  const out=[];let row=[],cell='',q=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(q){
+      if(ch==='"'&&text[i+1]==='"'){cell+='"';i++;}
+      else if(ch==='"')q=false;
+      else cell+=ch;
+    }else if(ch==='"')q=true;
+    else if(ch===delim){row.push(cell);cell='';}
+    else if(ch==='\n'){row.push(cell);out.push(row);row=[];cell='';}
+    else if(ch!=='\r')cell+=ch;
+  }
+  if(cell||row.length){row.push(cell);out.push(row);}
+  return out.filter(r=>r.some(c=>String(c).trim()));
+}
+function mapHeaders(head){
+  const idx={};
+  head.forEach((h,i)=>{
+    const n=normQ(h).replace(/[.,()€%]/g,'').replace(/\s+/g,' ').trim();
+    for(const key in IMPORT_ALIASES)
+      if(idx[key]===undefined&&IMPORT_ALIASES[key].some(a=>n===a||n.startsWith(a)))idx[key]=i;
+  });
+  return idx;
+}
+/* Any supported file -> a plain list of invoice objects in this app's shape. */
+function parseImportDoc(text,name){
+  const trimmed=text.trim();
+  if(trimmed.startsWith('{')||trimmed.startsWith('[')){
+    let j;try{j=JSON.parse(trimmed);}catch(e){throw new Error(t('impBadJson'));}
+    const list=Array.isArray(j)?j:(j.invoices||[]);
+    if(!Array.isArray(list)||!list.length)throw new Error(t('impNoInvoices'));
+    return {invoices:list.map(normaliseImported),source:(j&&j.source)||name};
+  }
+  const rows=csvRows(text);
+  if(rows.length<2)throw new Error(t('impNoInvoices'));
+  const idx=mapHeaders(rows[0]);
+  if(idx.no===undefined)throw new Error(t('impNoColumn'));
+  const byNo=new Map();
+  rows.slice(1).forEach(r=>{
+    const no=String(r[idx.no]||'').trim();
+    if(!no)return;
+    let inv=byNo.get(no);
+    if(!inv){
+      inv={no,date:(r[idx.date]||'').trim(),dueDate:(r[idx.due]||'').trim(),
+           buyer:{name:(r[idx.buyer]||'').trim(),code:(r[idx.code]||'').trim(),
+                  vat:(r[idx.vat]||'').trim(),address:(r[idx.address]||'').trim(),
+                  phone:'',email:'',contact:'',kind:'company'},
+           lines:[],type:'invoice',currency:cur(),status:'sent',payments:[]};
+      byNo.set(no,inv);
+    }
+    const nm=idx.item!==undefined?String(r[idx.item]||'').trim():'';
+    const qty=idx.qty!==undefined?num(r[idx.qty]):0;
+    const price=idx.price!==undefined?num(r[idx.price]):0;
+    const net=idx.net!==undefined?num(r[idx.net]):0;
+    const rate=idx.rate!==undefined?num(r[idx.rate]):num(S.settings.vatRate);
+    if(nm||qty||price||net){
+      inv.lines.push({name:nm||t('impLineFallback'),qty:qty||1,unit:(r[idx.unit]||'').trim()||S.settings.unit,
+                      price:price||(qty?r2(net/qty):net),disc:0,vat:rate});
+    }
+  });
+  const list=Array.from(byNo.values()).filter(i=>i.lines.length);
+  if(!list.length)throw new Error(t('impNoInvoices'));
+  return {invoices:list.map(normaliseImported),source:name};
+}
+/* Fill in whatever the source did not carry, without inventing figures. */
+function normaliseImported(raw){
+  const b=raw.buyer||{};
+  const lines=(raw.lines||[]).map(l=>({
+    id:uid(),name:String(l.name||'').trim(),qty:num(l.qty)||0,unit:l.unit||S.settings.unit||'vnt',
+    price:num(l.price)||0,disc:num(l.disc)||0,vat:l.vat==null?num(S.settings.vatRate):num(l.vat)}));
+  const date=(raw.date||'').slice(0,10)||today();
+  return {
+    id:uid(),
+    no:String(raw.no||'').trim(),
+    series:raw.series||'',
+    seq:num(raw.seq)||num(String(raw.no||'').replace(/\D/g,''))||0,
+    type:raw.type||'invoice',
+    date,
+    dueDate:(raw.dueDate||'').slice(0,10)||date,
+    term:raw.dueDate?daysBetween(date,(raw.dueDate||'').slice(0,10)):0,
+    buyer:{name:String(b.name||'').trim(),code:String(b.code||'').trim(),vat:String(b.vat||'').trim(),
+           address:String(b.address||'').trim(),email:b.email||'',phone:b.phone||'',
+           contact:b.contact||'',kind:b.kind||'company',note:b.note||''},
+    customerId:null,
+    lines:lines.length?lines:[{id:uid(),name:t('impLineFallback'),qty:1,unit:'vnt',price:0,disc:0,vat:0}],
+    notes:raw.notes||'',currency:raw.currency||cur(),
+    status:raw.status||'sent',payments:raw.payments||[],
+    issuer:raw.issuer||'',receiver:raw.receiver||'',
+    imported:true
+  };
+}
+/* "DBSF 0002943" -> "{S} {NNNNNNN}", so the next invoice keeps the old shape
+   instead of restarting in this app's default format. */
+function inferFormat(no,series){
+  if(!no)return '';
+  let rest=String(no);
+  if(series&&rest.indexOf(series)===0)rest=rest.slice(series.length);
+  const m=/^(\D{0,3})(\d+)$/.exec(rest);
+  if(!m)return '';
+  return '{S}'+m[1]+'{'+'N'.repeat(m[2].length)+'}';
+}
+function importPlan(list){
+  const have=new Set(S.invoices.map(i=>normQ(i.no)));
+  const fresh=[],dupes=[];
+  list.forEach(i=>{
+    if(!i.no||have.has(normQ(i.no)))dupes.push(i);
+    else{have.add(normQ(i.no));fresh.push(i);}
+  });
+  const custKey=b=>b.code?('c:'+b.code):('n:'+normQ(b.name));
+  const known=new Set(S.customers.map(c=>c.code?('c:'+c.code):('n:'+normQ(c.name))));
+  const newCust=new Map();
+  fresh.forEach(i=>{
+    const k=custKey(i.buyer);
+    if(!i.buyer.name||known.has(k)||newCust.has(k))return;
+    newCust.set(k,i.buyer);
+  });
+  const dates=fresh.map(i=>i.date).filter(Boolean).sort();
+  const total=r2(fresh.reduce((s,i)=>s+calc(i).total,0));
+  const series=(fresh.find(i=>i.series)||{}).series||'';
+  const maxSeq=fresh.reduce((m,i)=>Math.max(m,num(i.seq)||0),0);
+  const format=inferFormat((fresh.find(i=>i.no)||{}).no||'',series);
+  return {fresh,dupes,newCust:Array.from(newCust.values()),
+          from:dates[0]||'',to:dates[dates.length-1]||'',total,series,maxSeq,format};
+}
+function applyImport(plan,opts){
+  opts=opts||{};
+  const custKey=b=>b.code?('c:'+b.code):('n:'+normQ(b.name));
+  const index=new Map();
+  S.customers.forEach(c=>index.set(c.code?('c:'+c.code):('n:'+normQ(c.name)),c));
+  plan.newCust.forEach(b=>{
+    const c={id:uid(),kind:b.kind||'company',name:b.name,code:b.code||'',vat:b.vat||'',
+             address:b.address||'',email:b.email||'',phone:b.phone||'',contact:'',
+             term:null,note:'',src:'import'};
+    S.customers.push(c);index.set(custKey(b),c);
+  });
+  plan.fresh.forEach(i=>{
+    const c=index.get(custKey(i.buyer));
+    if(c)i.customerId=c.id;
+    if(opts.markPaid&&!(i.payments||[]).length)
+      i.payments=[{id:uid(),date:i.dueDate||i.date,amount:calc(i).total,note:t('impMarkedPaid')}];
+    S.invoices.push(i);
+  });
+  if(opts.adoptNumbering&&plan.maxSeq){
+    if(plan.series)S.settings.series=plan.series;
+    S.settings.next=plan.maxSeq+1;
+    if(plan.format)S.settings.format=plan.format;
+  }
+  saveNow();
+}
+
+function importModal(){
+  let plan=null,srcName='';
+  const opts={adoptNumbering:true,markPaid:false,numberFormat:''};
+  const body=()=>`
+    <div class="note" style="margin-bottom:12px">${esc(t('impHint'))}</div>
+    <div class="drop" id="impDrop">
+      <div class="big">${esc(t('impDrop'))}</div>
+      <div class="muted">${esc(t('impFormats'))}</div>
+      <input type="file" id="impFile" accept=".json,.csv,.txt,application/json,text/csv" style="display:none">
+    </div>
+    <div id="impPreview"></div>`;
+  const preview=()=>{
+    const box=$('#impPreview');
+    if(!plan){box.innerHTML='';$('#impGo').disabled=true;return;}
+    $('#impGo').disabled=!plan.fresh.length;
+    box.innerHTML=`
+      <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:14px">
+        <div class="kpi ok"><div class="kl">${esc(t('impNew'))}</div><div class="kv">${plan.fresh.length}</div>
+          <div class="ks">${esc(plan.from)} → ${esc(plan.to)}</div></div>
+        <div class="kpi"><div class="kl">${esc(t('impCustomers'))}</div><div class="kv">${plan.newCust.length}</div>
+          <div class="ks">${esc(t('impCustomersSub'))}</div></div>
+        <div class="kpi"><div class="kl">${esc(t('colTotal'))}</div><div class="kv">${money(plan.total)}</div>
+          <div class="ks">${esc(cur())}</div></div>
+      </div>
+      ${plan.dupes.length?`<div class="note warn" style="margin-top:12px">${esc(t('impDupes'))}: <b>${plan.dupes.length}</b>
+        <span class="muted">${esc(plan.dupes.slice(0,6).map(d=>d.no).join(', '))}${plan.dupes.length>6?'…':''}</span></div>`:''}
+      <div style="margin-top:14px">
+        <label class="inline-check"><input type="checkbox" id="impNum" ${opts.adoptNumbering?'checked':''}>
+          <span>${esc(t('impAdopt'))}${plan.maxSeq?` — <b class="mono">${esc(formatNo(plan.format||S.settings.format,plan.series||S.settings.series,plan.maxSeq+1))}</b>`:''}</span></label>
+        <label class="inline-check" style="margin-top:7px"><input type="checkbox" id="impPaid" ${opts.markPaid?'checked':''}>
+          <span>${esc(t('impMarkPaid'))}</span></label>
+      </div>
+      <div class="tblwrap" style="margin-top:14px;max-height:210px;overflow-y:auto">
+        <table><thead><tr><th>${esc(t('colNo'))}</th><th>${esc(t('colDate'))}</th>
+          <th>${esc(t('colCustomer'))}</th><th class="num">${esc(t('colTotal'))}</th></tr></thead><tbody>
+          ${plan.fresh.slice(0,60).map(i=>`<tr><td class="mono">${esc(i.no)}</td>
+            <td class="mono">${esc(i.date)}</td><td>${esc(i.buyer.name)}</td>
+            <td class="num">${money(calc(i).total)}</td></tr>`).join('')}
+        </tbody></table></div>
+      ${plan.fresh.length>60?`<div class="muted" style="margin-top:6px">…${plan.fresh.length-60} ${esc(t('impMore'))}</div>`:''}`;
+    $('#impNum').onchange=e=>{opts.adoptNumbering=e.target.checked;};
+    $('#impPaid').onchange=e=>{opts.markPaid=e.target.checked;};
+  };
+  const take=file=>{
+    srcName=file.name;
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        const doc=parseImportDoc(String(rd.result),srcName);
+        plan=importPlan(doc.invoices);
+        preview();
+        toast(t('impRead')+' '+doc.invoices.length);
+      }catch(e){plan=null;preview();toast(String(e.message||e),true);}
+    };
+    rd.readAsText(file);
+  };
+  openModal(t('impTitle'),body(),
+    `<button class="btn" data-mclose>${esc(t('cancel'))}</button>
+     <button class="btn primary" id="impGo" disabled>${esc(t('impGo'))}</button>`,
+    ()=>{
+      const drop=$('#impDrop'),file=$('#impFile');
+      drop.onclick=()=>file.click();
+      file.onchange=e=>{if(e.target.files[0])take(e.target.files[0]);};
+      drop.ondragover=e=>{e.preventDefault();drop.classList.add('over');};
+      drop.ondragleave=()=>drop.classList.remove('over');
+      drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');
+        if(e.dataTransfer.files[0])take(e.dataTransfer.files[0]);};
+      $('#impGo').onclick=()=>{
+        if(!plan||!plan.fresh.length)return;
+        const n=plan.fresh.length;
+        applyImport(plan,opts);
+        closeModal();render();
+        toast(t('impDone')+' '+n);
+      };
+    });
 }
 
 /* ===================== cloud UI ===================== */
@@ -3254,18 +3768,23 @@ function importBackup(file){
   };
   rd.readAsText(file);
 }
+function csvOf(head,rows){
+  const q=v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`;
+  return '﻿'+[head,...rows].map(r=>r.map(q).join(';')).join('\r\n');
+}
 /* Excel-friendly: semicolon separated + BOM, the shape LT accountants expect. */
-function exportCsv(list){
-  if(!list.length){toast(t('nothingSelected'),true);return;}
+function invoiceCsv(list){
   const head=['Nr','Data','Terminas','Pirkejas','Imones kodas','PVM kodas','Suma be PVM','PVM','Viso','Apmoketa','Likutis','Busena','Valiuta'];
-  const rows=list.map(i=>{
+  return csvOf(head,list.map(i=>{
     const c=calc(i),b=i.buyer||{};
     return [i.no,i.date,i.dueDate,b.name||'',b.code||'',b.vat||'',
             c.net.toFixed(2),c.vat.toFixed(2),c.total.toFixed(2),c.paid.toFixed(2),c.due.toFixed(2),
             t(STATUS_LABEL[invStatus(i)]),i.currency||cur()];
-  });
-  const csv=[head,...rows].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
-  download(`saskaitos-${today()}.csv`,'﻿'+csv,'text/csv;charset=utf-8');
+  }));
+}
+function exportCsv(list,name){
+  if(!list.length){toast(t('nothingSelected'),true);return;}
+  download(name||`saskaitos-${today()}.csv`,invoiceCsv(list),'text/csv;charset=utf-8');
 }
 function mailInvoice(inv){
   const b=inv.buyer||{},c=calc(inv);
@@ -3403,10 +3922,6 @@ async function makeZip(files){
   return new Blob([...parts,...central,new Uint8Array(end.buffer)],{type:'application/zip'});
 }
 
-function csvOf(head,rows){
-  const q=v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`;
-  return '﻿'+[head,...rows].map(r=>r.map(q).join(';')).join('\r\n');
-}
 /* Everything the app knows, in one archive. */
 async function exportEverything(){
   const stamp=today();
@@ -3686,6 +4201,7 @@ function invoiceHtml(inv,opt){
     <div>${esc([s.web,s.email,s.phone].filter(Boolean).join(' · '))}</div></div>`:''}
 </div>`;
 
+  if(opt.fragment)return body;
   if(opt.bodyOnly)return `<style>${brandCss(br)}</style>`+body;
   return `<!DOCTYPE html><html lang="${LANG}"><head><meta charset="utf-8">
 <title>${esc(docTitle(inv))} ${esc(inv.no)}</title>
@@ -3800,6 +4316,7 @@ td{font-size:11px}
 tfoot td{border-top:2px solid #1b1e26;border-bottom:0;padding-top:9px}
 @media print{.fld{break-inside:avoid}}`;
 
+  if(opt.fragment)return body;
   if(opt.bodyOnly)return `<style>${brandCss(br)}${extra}</style>`+body;
   return `<!DOCTYPE html><html lang="${LANG}"><head><meta charset="utf-8">
 <title>${esc(title)} ${esc(w.no)}</title>
@@ -3838,7 +4355,11 @@ Object.defineProperties(window,{
   CLOUD_SQL:{get:()=>CLOUD_SQL,configurable:true}
 });
 Object.assign(window,{t,esc,num,r2,uid,deacc,normQ,money,today,cur,lineNet,eurStr,shade,
-                      wbDrivers,wbDriverNames,wbDriverDocs});
+                      wbDrivers,wbDriverNames,wbDriverDocs,
+                      periodRange,weekStart,addMonths,monthStart,csvRows,mapHeaders,
+                      expMatch,periodDocHtml,parseImportDoc,importPlan,applyImport,invoiceCsv,
+                      inferFormat,formatNo});
+Object.defineProperty(window,'EXP',{get:()=>EXP,set:v=>{EXP=v},configurable:true});
 
 /* ===================== boot ===================== */
 function boot(){

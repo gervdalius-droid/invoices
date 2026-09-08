@@ -390,6 +390,156 @@ function tests(W,D){
   W.S.waybills=[];W.S.invoices=[];W.S.customers=[];W.S.settings.next=1;W.S.settings.wbNext=1;
 
   /* ---------------------------------------------------------------- */
+  grp('period ranges');
+  eq('week starts on Monday', W.weekStart('2026-09-10'), '2026-09-07');
+  eq('a Monday is its own week start', W.weekStart('2026-09-07'), '2026-09-07');
+  eq('a Sunday belongs to the week before', W.weekStart('2026-09-13'), '2026-09-07');
+  eq('month start', W.monthStart('2026-09-08'), '2026-09-01');
+  eq('addMonths crosses the year', W.addMonths('2026-12-01', 1), '2027-01-01');
+  const yNow=new Date().toISOString().slice(0,4);
+  eq('this year starts in January', W.periodRange('thisYear').from, yNow+'-01-01');
+  eq('this year ends in December', W.periodRange('thisYear').to, yNow+'-12-31');
+  eq('last year', W.periodRange('lastYear').from, (yNow-1)+'-01-01');
+  ok('this month is a whole month',
+     W.periodRange('thisMonth').from.endsWith('-01') && W.periodRange('thisMonth').to > W.periodRange('thisMonth').from);
+  ok('a month range never leaks into the next month',
+     W.periodRange('thisMonth').to.slice(0,7) === W.periodRange('thisMonth').from.slice(0,7));
+  ok('a week range is exactly 7 days',
+     W.daysBetween(W.periodRange('thisWeek').from, W.periodRange('thisWeek').to) === 6);
+
+  /* ---------------------------------------------------------------- */
+  grp('period export filter');
+  W.S.invoices=[];W.S.waybills=[];
+  const mkInv=(no,date,type,paid)=>({id:'x'+no,no,date,dueDate:date,type,seq:+no,
+    buyer:{name:'B '+no},lines:[{id:'l',name:'x',qty:1,unit:'vnt',price:100,disc:0,vat:21}],
+    payments:paid?[{amount:121}]:[],status:'sent',currency:'EUR'});
+  W.S.invoices=[mkInv('1','2026-01-15','invoice',false), mkInv('2','2026-02-10','invoice',true),
+                mkInv('3','2026-02-20','proforma',false), mkInv('4','2025-12-31','invoice',false),
+                mkInv('5','2026-02-28','credit',false)];
+  W.EXP={kind:'custom',from:'2026-02-01',to:'2026-02-28',
+         types:{invoice:true,simple:true,proforma:true,credit:true},status:'all',waybills:false};
+  let pm=W.expMatch();
+  eq('custom range picks February only', pm.invoices.length, 3);
+  ok('the December invoice is excluded', !pm.invoices.some(i=>i.no==='4'));
+  ok('results are date-ordered', pm.invoices[0].date <= pm.invoices[1].date);
+  W.EXP.types.proforma=false;
+  eq('type filter drops proformas', W.expMatch().invoices.length, 2);
+  W.EXP.types.credit=false;
+  eq('type filter drops credit notes', W.expMatch().invoices.length, 1);
+  W.EXP.types={invoice:true,simple:true,proforma:true,credit:true};
+  W.EXP.status='paid';
+  eq('paid filter', W.expMatch().invoices.length, 1);
+  eq('paid filter picks the right one', W.expMatch().invoices[0].no, '2');
+  W.EXP.status='unpaid';
+  eq('unpaid filter', W.expMatch().invoices.length, 2);
+  W.EXP.status='all';
+  W.EXP.kind='all';
+  eq('all periods returns everything', W.expMatch().invoices.length, 5);
+  /* the combined document */
+  W.EXP.kind='custom';W.EXP.from='2026-02-01';W.EXP.to='2026-02-28';
+  pm=W.expMatch();
+  const periodDoc=W.periodDocHtml(pm.invoices,[]);
+  eq('one sheet per invoice', (periodDoc.match(/class="sheet"/g)||[]).length, 3);
+  ok('sheets break onto separate pages', periodDoc.indexOf('page-break-after:always')>=0);
+  ok('the stylesheet appears exactly once', (periodDoc.match(/@page/g)||[]).length===1);
+  ok('every invoice number is in the document',
+     pm.invoices.every(i=>periodDoc.indexOf(i.no)>=0));
+  const periodDocW=W.periodDocHtml(pm.invoices,[{id:'w',no:'VZ-9',date:'2026-02-11',
+    consignor:{name:'A'},carrier:{name:'A'},consignee:{name:'B'},drivers:[{name:'D',doc:''}],
+    lines:[{id:'q',name:'Dėžė',qty:1,unit:'vnt',packs:1,weight:1,value:1}],status:'issued'}]);
+  eq('waybills add their own sheets', (periodDocW.match(/class="sheet"/g)||[]).length, 4);
+  W.S.invoices=[];
+
+  /* ---------------------------------------------------------------- */
+  grp('import');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.next=1;W.S.settings.series='SF';
+  /* the JSON shape tools/import_pdf.py produces */
+  const pdfJson=JSON.stringify({format:'saskaitos-import',version:1,source:'book.pdf',invoices:[
+    {no:'DBSF 0002851',series:'DBSF',seq:2851,type:'invoice',date:'2026-01-05',dueDate:'2026-01-06',
+     buyer:{name:'MB "Leto projektai"',code:'303177592',vat:'LT100009036810',address:'Vilnius'},
+     lines:[{name:'LMDP skydai',qty:2,unit:'kompl',price:230.5,disc:0,vat:21}],
+     currency:'EUR',status:'sent',payments:[]},
+    {no:'DBSF 0002852',series:'DBSF',seq:2852,type:'invoice',date:'2026-01-09',dueDate:'2026-01-16',
+     buyer:{name:'MB "Leto projektai"',code:'303177592',vat:'LT100009036810',address:'Vilnius'},
+     lines:[{name:'Stalas',qty:1,unit:'vnt',price:500,disc:0,vat:21}],
+     currency:'EUR',status:'sent',payments:[]}]});
+  let impDoc=W.parseImportDoc(pdfJson,'book.json');
+  eq('parsed both invoices', impDoc.invoices.length, 2);
+  eq('number kept', impDoc.invoices[0].no, 'DBSF 0002851');
+  eq('buyer kept', impDoc.invoices[0].buyer.code, '303177592');
+  near('line maths survive', W.calc(impDoc.invoices[0]).total, 557.81);
+  ok('every imported invoice got an id', impDoc.invoices.every(i=>!!i.id));
+  ok('imported invoices are flagged', impDoc.invoices.every(i=>i.imported===true));
+
+  let impPlanA=W.importPlan(impDoc.invoices);
+  eq('both are new', impPlanA.fresh.length, 2);
+  eq('nothing duplicated yet', impPlanA.dupes.length, 0);
+  eq('one customer to create (same buyer twice)', impPlanA.newCust.length, 1);
+  eq('date range detected', impPlanA.from, '2026-01-05');
+  eq('series detected', impPlanA.series, 'DBSF');
+  eq('highest sequence detected', impPlanA.maxSeq, 2852);
+  eq('number shape inferred', impPlanA.format, '{S} {NNNNNNN}');
+  eq('inferFormat on a dashed run', W.inferFormat('SF-0042','SF'), '{S}-{NNNN}');
+  eq('inferFormat with no separator', W.inferFormat('AB123','AB'), '{S}{NNN}');
+  eq('inferFormat gives up on odd shapes', W.inferFormat('2026/INV/7','X'), '');
+  eq('a 7-digit run formats', W.formatNo('{S} {NNNNNNN}','DBSF',2944), 'DBSF 0002944');
+  W.applyImport(impPlanA,{adoptNumbering:true});
+  eq('invoices merged in', W.S.invoices.length, 2);
+  eq('customer created once', W.S.customers.length, 1);
+  ok('invoices link to that customer',
+     W.S.invoices.every(i=>i.customerId===W.S.customers[0].id));
+  eq('numbering continues from the import', W.S.settings.next, 2853);
+  eq('series adopted', W.S.settings.series, 'DBSF');
+  eq('number shape adopted', W.S.settings.format, '{S} {NNNNNNN}');
+  eq('the next invoice keeps the old shape', W.makeNumber(), 'DBSF 0002853');
+
+  /* re-importing the same file must change nothing */
+  const plan2=W.importPlan(W.parseImportDoc(pdfJson,'book.json').invoices);
+  eq('re-import finds no new invoices', plan2.fresh.length, 0);
+  eq('re-import reports both as duplicates', plan2.dupes.length, 2);
+  W.applyImport(plan2,{adoptNumbering:false});
+  eq('still only two invoices', W.S.invoices.length, 2);
+  eq('still only one customer', W.S.customers.length, 1);
+
+  /* mark-as-paid option */
+  W.S.invoices=[];W.S.customers=[];
+  const plan3=W.importPlan(W.parseImportDoc(pdfJson,'x').invoices);
+  W.applyImport(plan3,{markPaid:true});
+  ok('marked paid', W.S.invoices.every(i=>W.calc(i).due<=0.005));
+  eq('and reads as paid', W.invStatus(W.S.invoices[0]), 'paid');
+
+  /* CSV */
+  W.S.invoices=[];W.S.customers=[];
+  const csvText='Nr;Data;Terminas;Pirkejas;Imones kodas;PVM kodas;Pavadinimas;Kiekis;Matas;Kaina;PVM %\r\n'+
+            '"A-1";"2026-03-01";"2026-03-15";"UAB Testas";"123456789";"LT123456715";"Stalas";"2";"vnt";"150";"21"\r\n'+
+            '"A-1";"2026-03-01";"2026-03-15";"UAB Testas";"123456789";"LT123456715";"Kėdė";"4";"vnt";"50";"21"\r\n'+
+            '"A-2";"2026-03-05";"2026-03-19";"UAB Kitas";"987654321";"";"Spinta";"1";"vnt";"800";"21"\r\n';
+  const cdoc=W.parseImportDoc(csvText,'x.csv');
+  eq('CSV grouped into two invoices', cdoc.invoices.length, 2);
+  eq('first invoice got both lines', cdoc.invoices[0].lines.length, 2);
+  near('CSV line maths', W.calc(cdoc.invoices[0]).total, 605);
+  eq('CSV buyer parsed', cdoc.invoices[1].buyer.name, 'UAB Kitas');
+  const cplan=W.importPlan(cdoc.invoices);
+  eq('two customers from CSV', cplan.newCust.length, 2);
+  W.applyImport(cplan,{});
+  eq('CSV imported', W.S.invoices.length, 2);
+  /* a CSV with no recognisable number column is refused, not half-imported */
+  let threw=false;
+  try{W.parseImportDoc('Foo;Bar\r\n1;2\r\n','y.csv');}catch(e){threw=true;}
+  ok('a CSV without a number column is rejected', threw);
+  threw=false;
+  try{W.parseImportDoc('{not json','z.json');}catch(e){threw=true;}
+  ok('broken JSON is rejected', threw);
+  eq('nothing was added by the failures', W.S.invoices.length, 2);
+  /* comma-delimited and quoted fields with separators inside */
+  const csv2='Nr,Data,Pirkejas,Pavadinimas,Kiekis,Kaina\n"B-1","2026-04-01","UAB ""Kabutės"", ir kablelis","Stalas, didelis","1","10"\n';
+  const c2=W.parseImportDoc(csv2,'c2.csv');
+  eq('comma CSV parsed', c2.invoices.length, 1);
+  eq('quoted comma survived in the buyer', c2.invoices[0].buyer.name, 'UAB "Kabutės", ir kablelis');
+  eq('quoted comma survived in the item', c2.invoices[0].lines[0].name, 'Stalas, didelis');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.series='SF';W.S.settings.next=1;
+
+  /* ---------------------------------------------------------------- */
   grp('branding');
   eq('shade darkens', W.shade('#ffffff',-100), '#000000');
   eq('shade lightens', W.shade('#000000',100), '#ffffff');
