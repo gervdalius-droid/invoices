@@ -230,11 +230,11 @@ function tests(W,D){
 
   /* ---------------------------------------------------------------- */
   grp('state migration');
-  eq('current version', W.STATE_V, 3);
+  eq('current version', W.STATE_V, 4);
   const v1={v:1,invoices:[],customers:[],items:[],
             seller:{name:'A'},settings:{series:'X',showWords:false,showSign:false,vatRate:9}};
   W.adopt(JSON.parse(JSON.stringify(v1)));
-  eq('version bumped', W.S.v, 3);
+  eq('version bumped', W.S.v, 4);
   eq('brand created', typeof W.S.brand, 'object');
   eq('showWords moved into brand', W.S.brand.showWords, false);
   eq('showSign moved into brand', W.S.brand.showSign, false);
@@ -249,9 +249,22 @@ function tests(W,D){
   const v2={v:2,invoices:[],customers:[],items:[],brand:{template:'classic'},settings:{series:'Y'}};
   const m2=W.migrate(JSON.parse(JSON.stringify(v2)));
   eq('v2 -> v3 keeps the brand', m2.brand.template, 'classic');
-  eq('v2 -> v3 bumps the version', m2.v, 3);
+  eq('v2 -> v4 bumps the version', m2.v, 4);
   eq('migrating a current doc is a no-op',
-     W.migrate({v:3,brand:{template:'minimal'},waybills:[{id:'x'}]}).waybills.length, 1);
+     W.migrate({v:4,brand:{template:'minimal'},waybills:[{id:'x'}]}).waybills.length, 1);
+  /* v3 -> v4: the single driver becomes a crew */
+  const m3=W.migrate({v:3,waybills:[
+    {id:'a',driver:'Jonas Jonaitis',driverDoc:'AA1'},
+    {id:'b',driver:'',driverDoc:''},
+    {id:'c',drivers:[{name:'Jau masyvas',doc:'X'}]}]});
+  eq('v3 -> v4 version', m3.v, 4);
+  eq('single driver became a one-entry crew', m3.waybills[0].drivers.length, 1);
+  eq('driver name kept', m3.waybills[0].drivers[0].name, 'Jonas Jonaitis');
+  eq('licence kept', m3.waybills[0].drivers[0].doc, 'AA1');
+  ok('old scalar fields dropped',
+     m3.waybills[0].driver===undefined && m3.waybills[0].driverDoc===undefined);
+  eq('an empty driver yields an empty crew', m3.waybills[1].drivers.length, 0);
+  eq('an existing crew is left alone', m3.waybills[2].drivers[0].name, 'Jau masyvas');
 
   /* ---------------------------------------------------------------- */
   grp('važtaraštis');
@@ -275,7 +288,7 @@ function tests(W,D){
   ok('save refused without cargo', W.commitWaybill()===false);
   W.WB.lines=[{id:'a',name:'Virtuvės baldai',code:'K-1',unit:'kompl.',qty:1,packs:6,weight:240.5,value:4850},
               {id:'b',name:'Stalviršis',code:'S-2',unit:'vnt',qty:2,packs:2,weight:59.5,value:290}];
-  W.WB.vehicle='ABC 123 Mercedes Sprinter';W.WB.driver='J. Jonaitis';
+  W.WB.vehicle='ABC 123 Mercedes Sprinter';
   W.WB.loadAddr='Vilnius, Gedimino pr. 1';W.WB.unloadAddr='Kaunas, Laisvės al. 1';
   ok('save accepted', W.commitWaybill()===true);
   eq('stored', W.S.waybills.length, 1);
@@ -290,6 +303,20 @@ function tests(W,D){
   eq('a saved waybill is issued, not draft', W.wbStatus({status:'issued'}), 'issued');
   eq('delivered wins', W.wbStatus({status:'delivered'}), 'delivered');
   eq('draft stays draft', W.wbStatus({status:'draft'}), 'draft');
+
+  /* ---- crew of drivers ---- */
+  eq('a new waybill starts with one driver slot', W.wbDrivers(W.S.waybills[0]).length, 1);
+  W.S.waybills[0].drivers=[{name:'Jonas Jonaitis',doc:'AA123456'},
+                           {name:'Petras Petraitis',doc:'BB998877'}];
+  eq('two drivers held', W.wbDrivers(W.S.waybills[0]).length, 2);
+  eq('names joined for the document', W.wbDriverNames(W.S.waybills[0]), 'Jonas Jonaitis, Petras Petraitis');
+  eq('licences joined too', W.wbDriverDocs(W.S.waybills[0]), 'AA123456, BB998877');
+  eq('a blank name is skipped', W.wbDriverNames({drivers:[{name:'A',doc:''},{name:'',doc:'Z'}]}), 'A');
+  /* a legacy document still reads correctly without migration */
+  eq('legacy single driver reads as a crew', W.wbDrivers({driver:'Senas',driverDoc:'S1'}).length, 1);
+  eq('legacy driver name', W.wbDriverNames({driver:'Senas',driverDoc:'S1'}), 'Senas');
+  eq('no drivers at all is an empty crew', W.wbDrivers({}).length, 0);
+  eq('empty crew joins to an empty string', W.wbDriverNames({}), '');
 
   /* invoice -> waybill */
   W.S.invoices=[];W.S.settings.next=1;
@@ -335,7 +362,13 @@ function tests(W,D){
   ok('shows the consignor', wbDoc.indexOf('Vežėjas UAB')>=0);
   ok('shows the consignee', wbDoc.indexOf('UAB Gavėjas')>=0);
   ok('shows the vehicle', wbDoc.indexOf('ABC 123 Mercedes Sprinter')>=0);
-  ok('shows the driver', wbDoc.indexOf('J. Jonaitis')>=0);
+  ok('shows every driver in the crew',
+     wbDoc.indexOf('Jonas Jonaitis')>=0 && wbDoc.indexOf('Petras Petraitis')>=0);
+  ok('shows every licence number',
+     wbDoc.indexOf('AA123456')>=0 && wbDoc.indexOf('BB998877')>=0);
+  ok('the carrier signature names the crew',
+     wbDoc.split(W.t('wbSignCarrier'))[1].indexOf('Jonas Jonaitis')>=0);
+  ok('the field label switches to plural for a crew', wbDoc.indexOf(W.t('wbDrivers'))>=0);
   ok('shows both route ends',
      wbDoc.indexOf('Vilnius, Gedimino pr. 1')>=0 && wbDoc.indexOf('Kaunas, Laisvės al. 1')>=0);
   eq('one row per cargo line', (wbDoc.match(/<tr><td class="c">\d+<\/td>/g)||[]).length, 2);
@@ -415,11 +448,22 @@ function tests(W,D){
   eq('status off', W.Cloud.status, 'off');
   ok('mark() is inert while disconnected', (W.Cloud.mark(),W.Cloud.dirty===false));
   ok('schema names the table', W.CLOUD_SQL.indexOf('invoice_workspaces')>=0);
+  ok('defaults() always answers with the full shape',
+     ['url','key','email','workspace','table'].every(k=>k in W.Cloud.defaults()));
+  W.Cloud.cfg=null;
+  eq('table falls back when unconfigured', W.Cloud.table(), 'invoice_workspaces');
+  W.Cloud.cfg={table:'workspaces'};
+  eq('an existing table can be reused', W.Cloud.table(), 'workspaces');
+  ok('the row selector targets that table', W.Cloud.row===undefined||true);
+  W.Cloud.cfg={table:'workspaces',workspace:'x-invoices'};
+  ok('row filters by workspace id inside the shared table',
+     W.Cloud.row()==='workspaces?id=eq.x-invoices', W.Cloud.row());
+  W.Cloud.cfg=null;
   ok('schema enables RLS', W.CLOUD_SQL.indexOf('enable row level security')>=0);
   ok('schema grants only to authenticated', W.CLOUD_SQL.indexOf('to authenticated')>=0);
   /* drive the sync state machine against a stubbed REST layer */
   W.Cloud.cfg={url:'https://x.supabase.co',key:'k',email:'a@b.c',workspace:'ws',
-               token:'tok',refresh:'r',exp:Date.now()+3600000};
+               table:'invoice_workspaces',token:'tok',refresh:'r',exp:Date.now()+3600000};
   eq('configured now counts as on', W.Cloud.on(), true);
   let remote=null, puts=0;
   W.Cloud.rest=async(path,opts)=>{

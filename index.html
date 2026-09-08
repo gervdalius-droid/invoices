@@ -300,6 +300,8 @@
   <div class="mf" id="modalFoot"></div>
 </div></div>
 
+<script src="cloud-config.js" onerror="window.__noCloudCfg=true"></script>
+
 <div class="toast" id="toast"></div>
 <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
 
@@ -438,6 +440,10 @@ const I18N={
   cloudKey:"Publishable / anon raktas",cloudEmail:"El. paštas",cloudPass:"Slaptažodis",
   cloudWorkspace:"Darbo sritis",cloudWorkspaceHint:"Vienas pavadinimas = vienas duomenų rinkinys. Naudokite tą patį visuose įrenginiuose.",
   cloudConnect:"Prisijungti",cloudSchema:"SQL lentelei sukurti",
+  cloudTable:"Lentelė",
+  cloudTableHint:"Galima naudoti esamą lentelę (pvz. ShopFlow „workspaces“) — tada nieko kurti nereikia.",
+  cloudPreset:"Paruošta.",
+  cloudPresetSub:"Prisijungimo duomenys užpildyti iš cloud-config.js — įveskite tik slaptažodį.",
   cloudSchemaHint:"Paleiskite vieną kartą: Supabase → SQL Editor → įklijuoti → Run. Tada Authentication → Users → pridėkite naudotoją.",
   cloudNeedAll:"Užpildykite visus laukus",
   cloudConnected:"Prisijungta prie debesies",
@@ -472,7 +478,8 @@ const I18N={
   wbUnloadAddr:"Iškrovimo vieta",wbUnloadDate:"Pristatymo data",
   wbTransport:"Transporto priemonė",
   wbVehicle:"Valst. numeris ir markė",wbTrailer:"Priekaba",
-  wbDriver:"Vairuotojas",wbDriverDoc:"Vairuotojo pažymėjimas / AK",
+  wbDriver:"Vairuotojas",wbDrivers:"Vairuotojai",wbDriverDoc:"Vairuotojo pažymėjimas / AK",
+  wbAddDriver:"＋ Pridėti vairuotoją",
   wbCargo:"Krovinys",wbAddLine:"＋ Eilutė",
   wbLnName:"Krovinio pavadinimas",wbLnCode:"Kodas",wbLnUnit:"Mato vnt.",
   wbLnQty:"Kiekis",wbLnPacks:"Vietų sk.",wbLnWeight:"Bruto masė, kg",wbLnValue:"Vertė, €",
@@ -626,6 +633,10 @@ const I18N={
   cloudKey:"Publishable / anon key",cloudEmail:"E-mail",cloudPass:"Password",
   cloudWorkspace:"Workspace",cloudWorkspaceHint:"One name = one data set. Use the same on every device.",
   cloudConnect:"Connect",cloudSchema:"SQL to create the table",
+  cloudTable:"Table",
+  cloudTableHint:"You can reuse an existing table (e.g. ShopFlow's “workspaces”) — then nothing needs creating.",
+  cloudPreset:"Ready.",
+  cloudPresetSub:"Connection details came from cloud-config.js — just enter the password.",
   cloudSchemaHint:"Run once: Supabase → SQL Editor → paste → Run. Then Authentication → Users → add a user.",
   cloudNeedAll:"Fill in every field",
   cloudConnected:"Connected to the cloud",
@@ -660,7 +671,8 @@ const I18N={
   wbUnloadAddr:"Place of delivery",wbUnloadDate:"Delivery date",
   wbTransport:"Vehicle",
   wbVehicle:"Plate and make",wbTrailer:"Trailer",
-  wbDriver:"Driver",wbDriverDoc:"Licence / ID",
+  wbDriver:"Driver",wbDrivers:"Drivers",wbDriverDoc:"Licence / ID",
+  wbAddDriver:"＋ Add driver",
   wbCargo:"Cargo",wbAddLine:"＋ Line",
   wbLnName:"Description of goods",wbLnCode:"Code",wbLnUnit:"Unit",
   wbLnQty:"Qty",wbLnPacks:"Packages",wbLnWeight:"Gross weight, kg",wbLnValue:"Value, €",
@@ -707,7 +719,7 @@ const t=k=>{const d=I18N[LANG];if(d&&d[k]!==undefined)return d[k];if(I18N.en[k]!
 const KEY='inv_state_v1', LANG_KEY='fab_lang'; /* same lang key the sibling apps use */
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
-const STATE_V=3;
+const STATE_V=4;
 /* Everything about how the printed invoice LOOKS lives here, so the document
    can be restyled without touching printInvoice's structure. */
 function blankBrand(){
@@ -760,6 +772,15 @@ function migrate(p){
     p.fleet=p.fleet||[];
     p.drivers=p.drivers||[];
     p.v=3;
+  }
+  if(p.v<4){
+    /* one driver per waybill became a crew: a long haul is often two up */
+    (p.waybills||[]).forEach(w=>{
+      if(!Array.isArray(w.drivers))
+        w.drivers=(w.driver||w.driverDoc)?[{name:w.driver||'',doc:w.driverDoc||''}]:[];
+      delete w.driver;delete w.driverDoc;
+    });
+    p.v=4;
   }
   return p;
 }
@@ -815,6 +836,14 @@ const Cloud={
   cfg:null, status:'off',   /* off | idle | syncing | error | conflict | offline */
   msg:'', seen:null, timer:null, poll:null, dirty:false, busy:false,
 
+  /* cloud-config.js (git-ignored, optional) pre-fills the connection so a new
+     device only has to type the password. It never carries one. */
+  defaults(){
+    const c=window.CLOUD_CONFIG||{};
+    return {url:c.url||'',key:c.key||c.anonKey||'',email:c.email||c.shopEmail||'',
+            workspace:c.workspace||'default',table:c.table||'invoice_workspaces'};
+  },
+  preset(){return !!(window.CLOUD_CONFIG&&window.CLOUD_CONFIG.url);},
   load(){try{this.cfg=JSON.parse(localStorage.getItem(this.CFG)||'null');}catch(e){this.cfg=null;}
          if(this.cfg)this.status='idle';return this.cfg;},
   save(c){this.cfg=c;try{localStorage.setItem(this.CFG,JSON.stringify(c));}catch(e){}},
@@ -822,7 +851,7 @@ const Cloud={
   base(){return String(this.cfg.url||'').replace(/\/+$/,'');},
 
   /* ---- auth ---- */
-  async signIn(url,key,email,password,workspace){
+  async signIn(url,key,email,password,workspace,table){
     url=String(url||'').replace(/\/+$/,'');
     const r=await fetch(url+'/auth/v1/token?grant_type=password',{
       method:'POST',headers:{'apikey':key,'Content-Type':'application/json'},
@@ -830,6 +859,7 @@ const Cloud={
     const j=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(j.error_description||j.msg||j.error||('HTTP '+r.status));
     this.save({url,key,email,workspace:workspace||'default',
+               table:table||this.defaults().table,
                token:j.access_token,refresh:j.refresh_token,exp:Date.now()+(j.expires_in||3600)*1000});
     this.status='idle';this.msg='';
     return true;
@@ -864,7 +894,10 @@ const Cloud={
     const txt=await r.text();
     return txt?JSON.parse(txt):null;
   },
-  row(){return 'invoice_workspaces?id=eq.'+encodeURIComponent(this.cfg.workspace);},
+  /* Table name is configurable: pointing at an existing `workspaces` table
+     (shopflow's, say) with a distinct row id needs no new table and no DDL. */
+  table(){return (this.cfg&&this.cfg.table)||'invoice_workspaces';},
+  row(){return this.table()+'?id=eq.'+encodeURIComponent(this.cfg.workspace);},
 
   async fetchRemote(){
     const rows=await this.rest(this.row()+'&select=id,data,updated_at,updated_by');
@@ -882,7 +915,7 @@ const Cloud={
   /* Overwrite the cloud with local state. */
   async put(){
     const now=new Date().toISOString();
-    await this.rest('invoice_workspaces',{
+    await this.rest(this.table(),{
       method:'POST',
       headers:{'Prefer':'resolution=merge-duplicates,return=representation'},
       body:JSON.stringify({id:this.cfg.workspace,data:S,updated_at:now,
@@ -2041,7 +2074,7 @@ function newWaybill(from){
     carrier:partyOf(S.seller),carrierSelf:true,
     loadAddr:S.seller.address||'',loadDate:today(),
     unloadAddr:'',unloadDate:'',
-    vehicle:'',trailer:'',driver:S.seller.director||'',driverDoc:'',
+    vehicle:'',trailer:'',drivers:[{name:S.seller.director||'',doc:''}],
     lines:[blankWbLine()],
     notes:s.wbNote||'',
     status:'draft',deliveredAt:'',receivedBy:'',
@@ -2073,6 +2106,13 @@ function openWaybill(id){
   WB=JSON.parse(JSON.stringify(w));WB.isNew=false;
   go('waybill');
 }
+/* Always an array, tolerating a legacy single-driver document. */
+function wbDrivers(w){
+  if(Array.isArray(w.drivers))return w.drivers;
+  return (w.driver||w.driverDoc)?[{name:w.driver||'',doc:w.driverDoc||''}]:[];
+}
+function wbDriverNames(w){return wbDrivers(w).map(d=>d.name).filter(Boolean).join(', ');}
+function wbDriverDocs(w){return wbDrivers(w).map(d=>d.doc).filter(Boolean).join(', ');}
 function wbTotals(w){
   const L=w.lines||[];
   return {packs:L.reduce((s,l)=>s+num(l.packs),0),
@@ -2107,8 +2147,8 @@ function renderWaybills(){
   if(wbFilter.open)list=list.filter(w=>wbStatus(w)!=='delivered');
   if(wbFilter.q){
     const q=normQ(wbFilter.q);
-    list=list.filter(w=>normQ([w.no,(w.consignee&&w.consignee.name)||'',w.vehicle,w.driver,
-      w.unloadAddr,w.loadAddr].join(' ')).includes(q));
+    list=list.filter(w=>normQ([w.no,(w.consignee&&w.consignee.name)||'',w.vehicle,
+      wbDriverNames(w),w.unloadAddr,w.loadAddr].join(' ')).includes(q));
   }
   $('#p-waybills').innerHTML=`
   <div class="card"><div class="head">
@@ -2133,7 +2173,7 @@ function renderWaybills(){
           <td class="mono">${esc(fmtDate(w.date))}</td>
           <td>${esc((w.consignee&&w.consignee.name)||'—')}</td>
           <td class="muted">${esc(route||'—')}</td>
-          <td class="mono">${esc(w.vehicle||'—')}</td>
+          <td class="mono">${esc(w.vehicle||'—')}${wbDrivers(w).length>1?` <span class="pill">${wbDrivers(w).length} 👤</span>`:''}</td>
           <td class="num">${tt.packs||'—'}</td>
           <td class="num">${tt.weight?money(tt.weight):'—'}</td>
           <td><span class="pill ${WB_STATUS_PILL[st]}">${esc(t(WB_STATUS_LABEL[st]))}</span></td></tr>`;}).join('')}
@@ -2225,12 +2265,14 @@ function renderWaybill(){
       ${S.drivers.length?`<select id="wbDriverPick" style="width:auto"><option value="">${esc(t('wbDriver'))}…</option>
         ${S.drivers.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select>`:''}
     </div>
-    <div class="body"><div class="grid4">
-      <label class="f"><span class="l">${esc(t('wbVehicle'))}</span><input id="wbVehicle" value="${esc(WB.vehicle||'')}"></label>
-      <label class="f"><span class="l">${esc(t('wbTrailer'))}</span><input id="wbTrailer" value="${esc(WB.trailer||'')}"></label>
-      <label class="f"><span class="l">${esc(t('wbDriver'))}</span><input id="wbDriver" value="${esc(WB.driver||'')}"></label>
-      <label class="f"><span class="l">${esc(t('wbDriverDoc'))}</span><input id="wbDriverDoc" value="${esc(WB.driverDoc||'')}"></label>
-    </div></div>
+    <div class="body">
+      <div class="grid2">
+        <label class="f"><span class="l">${esc(t('wbVehicle'))}</span><input id="wbVehicle" value="${esc(WB.vehicle||'')}"></label>
+        <label class="f"><span class="l">${esc(t('wbTrailer'))}</span><input id="wbTrailer" value="${esc(WB.trailer||'')}"></label>
+      </div>
+      <div class="sect-title" style="margin-top:16px">${esc(t('wbDrivers'))}</div>
+      <div id="wbDriverRows"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -2273,7 +2315,37 @@ function renderWaybill(){
   </div>`;
 
   renderWbLines();
+  renderWbDrivers();
   bindWaybill();
+}
+
+/* One row per driver — a crew of two is normal on a long haul, and each name
+   needs its own licence number on the note. */
+function renderWbDrivers(){
+  const box=$('#wbDriverRows');if(!box)return;
+  const list=wbDrivers(WB);
+  WB.drivers=list;
+  box.innerHTML=list.map((d,i)=>`
+    <div class="grid2 wb-drv" style="margin-bottom:9px;align-items:end">
+      <label class="f"><span class="l">${esc(t('wbDriver'))} ${list.length>1?(i+1):''}</span>
+        <input data-wd="${i}.name" value="${esc(d.name||'')}" placeholder="${esc(t('setDriverName'))}"></label>
+      <div style="display:flex;gap:8px;align-items:end">
+        <label class="f grow"><span class="l">${esc(t('wbDriverDoc'))}</span>
+          <input data-wd="${i}.doc" value="${esc(d.doc||'')}" class="mono"></label>
+        <button class="icon-btn" data-wdd="${i}" title="${esc(t('del'))}">✕</button>
+      </div>
+    </div>`).join('')
+    +`<button class="btn sm" id="wbAddDriver">${esc(t('wbAddDriver'))}</button>`;
+  box.querySelectorAll('[data-wd]').forEach(inp=>inp.oninput=()=>{
+    const [i,k]=inp.dataset.wd.split('.');
+    WB.drivers[+i][k]=inp.value;
+  });
+  box.querySelectorAll('[data-wdd]').forEach(b=>b.onclick=()=>{
+    WB.drivers.splice(+b.dataset.wdd,1);
+    renderWbDrivers();
+  });
+  $('#wbAddDriver').onclick=()=>{WB.drivers.push({name:'',doc:''});renderWbDrivers();
+    const r=box.querySelectorAll('[data-wd$=".name"]');r[r.length-1].focus();};
 }
 
 function renderWbLines(){
@@ -2326,7 +2398,6 @@ function bindWaybill(){
   bind('wbNo','no');bind('wbPlace','place');
   bind('wbLoadAddr','loadAddr');bind('wbUnloadAddr','unloadAddr');
   bind('wbVehicle','vehicle');bind('wbTrailer','trailer');
-  bind('wbDriver','driver');bind('wbDriverDoc','driverDoc');
   bind('wbNotes','notes');
   ['wbDate','wbLoadDate','wbUnloadDate'].forEach(id=>{
     const el=$('#'+id);if(!el)return;
@@ -2386,8 +2457,12 @@ function bindWaybill(){
   const dp=$('#wbDriverPick');
   if(dp)dp.onchange=()=>{
     const d=S.drivers.find(x=>x.id===dp.value);if(!d)return;
-    WB.driver=d.name;WB.driverDoc=d.doc||'';
-    $('#wbDriver').value=WB.driver;$('#wbDriverDoc').value=WB.driverDoc;dp.value='';
+    const list=wbDrivers(WB);
+    /* the picker appends, unless the crew is still one empty placeholder */
+    const blank=list.findIndex(x=>!String(x.name||'').trim()&&!String(x.doc||'').trim());
+    if(blank>=0)list[blank]={name:d.name,doc:d.doc||''};
+    else if(!list.some(x=>x.name===d.name))list.push({name:d.name,doc:d.doc||''});
+    WB.drivers=list;renderWbDrivers();dp.value='';
   };
   $('#wbAddLine').onclick=()=>{WB.lines.push(blankWbLine());renderWbLines();
     const r=$$('#wbBody input[data-k="name"]');r[r.length-1]&&r[r.length-1].focus();};
@@ -2411,6 +2486,7 @@ function bindWaybill(){
     copy.id=uid();copy.seq=s.wbNext;copy.no=makeWbNumber(s.wbNext);
     copy.date=today();copy.status='draft';copy.deliveredAt='';copy.receivedBy='';
     copy.lines=(copy.lines||[]).map(l=>({...l,id:uid()}));
+    copy.drivers=wbDrivers(copy).map(d=>({...d}));
     copy.isNew=true;WB=copy;renderWaybill();toast(t('copied'));
   };
   const dd=$('#wbDel');
@@ -3009,9 +3085,11 @@ function cloudChipClick(){
 function paintCloudPanel(){
   const box=$('#cloudPanel');if(!box)return;
   if(!Cloud.on()){
-    const c=Cloud.cfg||{};
+    const c=Object.assign(Cloud.defaults(),Cloud.cfg||{});
     box.innerHTML=`
       <div class="note" style="margin-bottom:12px">${esc(t('cloudHint'))}</div>
+      ${Cloud.preset()?`<div class="note" style="margin-bottom:12px;background:var(--good-bg);border-color:#bfe3cd">
+         <b>${esc(t('cloudPreset'))}</b> ${esc(t('cloudPresetSub'))}</div>`:''}
       <div class="grid2">
         <label class="f"><span class="l">Supabase URL</span>
           <input id="clUrl" placeholder="https://xxxx.supabase.co" value="${esc(c.url||'')}"></label>
@@ -3024,6 +3102,9 @@ function paintCloudPanel(){
         <label class="f"><span class="l">${esc(t('cloudWorkspace'))}</span>
           <input id="clWs" value="${esc(c.workspace||'default')}">
           <span class="h">${esc(t('cloudWorkspaceHint'))}</span></label>
+        <label class="f"><span class="l">${esc(t('cloudTable'))}</span>
+          <input id="clTable" value="${esc(c.table||'invoice_workspaces')}" class="mono">
+          <span class="h">${esc(t('cloudTableHint'))}</span></label>
       </div>
       <div class="btnrow" style="margin-top:12px">
         <button class="btn primary" id="clConnect">${esc(t('cloudConnect'))}</button>
@@ -3032,11 +3113,12 @@ function paintCloudPanel(){
       </div>`;
     $('#clConnect').onclick=async()=>{
       const url=$('#clUrl').value.trim(),key=$('#clKey').value.trim(),
-            email=$('#clEmail').value.trim(),pass=$('#clPass').value,ws=$('#clWs').value.trim()||'default';
+            email=$('#clEmail').value.trim(),pass=$('#clPass').value,ws=$('#clWs').value.trim()||'default',
+            tbl=$('#clTable').value.trim()||'invoice_workspaces';
       if(!url||!key||!email||!pass){toast(t('cloudNeedAll'),true);return;}
       $('#clMsg').textContent=t('cloudSyncing');
       try{
-        await Cloud.signIn(url,key,email,pass,ws);
+        await Cloud.signIn(url,key,email,pass,ws,tbl);
         const row=await Cloud.fetchRemote();
         if(row) firstConnectModal(row);
         else{ await Cloud.put(); toast(t('cloudConnected')); }
@@ -3052,7 +3134,7 @@ function paintCloudPanel(){
       <span class="dot ${Cloud.status}"></span>
       <b>${esc({idle:t('cloudSynced'),syncing:t('cloudSyncing'),error:t('cloudError'),
                 conflict:t('cloudConflict'),offline:t('cloudOffline')}[Cloud.status]||'')}</b>
-      <span class="muted">${esc(c.workspace)} · ${esc(c.email||'')}</span>
+      <span class="muted">${esc(c.workspace)} · ${esc(c.email||'')} · <span class="mono">${esc(Cloud.table())}</span></span>
       <div class="grow"></div>
       <button class="btn sm" id="clSync">${esc(t('cloudSyncNow'))}</button>
       <button class="btn sm" id="clDown">${esc(t('cloudPull'))}</button>
@@ -3364,7 +3446,7 @@ async function exportEverything(){
         return [w.no,w.date,(w.consignor||{}).name||'',(w.carrier||{}).name||'',
                 (w.consignee||{}).name||'',(w.consignee||{}).code||'',
                 w.loadAddr||'',w.unloadAddr||'',w.unloadDate||'',w.vehicle||'',w.trailer||'',
-                w.driver||'',tt.packs,tt.weight.toFixed(2),tt.value.toFixed(2),
+                wbDriverNames(w),tt.packs,tt.weight.toFixed(2),tt.value.toFixed(2),
                 t(WB_STATUS_LABEL[wbStatus(w)]),inv?inv.no:''];}))});
     S.waybills.forEach(w=>files.push({
       name:root+'vaztarasciai/'+slug(w.no||w.id)+'.html',text:waybillHtml(w,{standalone:true})}));
@@ -3661,8 +3743,8 @@ function waybillHtml(w,opt){
     ${field(t('wbUnloadDate'),fmtDate(w.unloadDate))}
     ${field(t('wbVehicle'),w.vehicle)}
     ${field(t('wbTrailer'),w.trailer)}
-    ${field(t('wbDriver'),w.driver)}
-    ${field(t('wbDriverDoc'),w.driverDoc)}
+    ${field(wbDrivers(w).length>1?t('wbDrivers'):t('wbDriver'),wbDriverNames(w))}
+    ${field(t('wbDriverDoc'),wbDriverDocs(w))}
   </div>
 
   <table><thead><tr>
@@ -3687,7 +3769,7 @@ function waybillHtml(w,opt){
       <div class="sline">${br.stamp?`<img class="stamp" src="${br.stamp}">`:''}</div>
       <div class="sn">${esc(t('wbSignHint'))}</div></div>
     <div class="sig"><div class="sl">${esc(t('wbSignCarrier'))}</div><div class="sline"></div>
-      <div class="sn">${esc(w.driver||t('wbSignHint'))}</div></div>
+      <div class="sn">${esc(wbDriverNames(w)||t('wbSignHint'))}</div></div>
     <div class="sig"><div class="sl">${esc(t('wbSignConsignee'))}</div><div class="sline"></div>
       <div class="sn">${esc(w.receivedBy||t('wbSignHint'))}</div></div>
   </div>
@@ -3748,7 +3830,8 @@ Object.defineProperties(window,{
   STATE_V:{get:()=>STATE_V,configurable:true},
   CLOUD_SQL:{get:()=>CLOUD_SQL,configurable:true}
 });
-Object.assign(window,{t,esc,num,r2,uid,deacc,normQ,money,today,cur,lineNet,eurStr,shade});
+Object.assign(window,{t,esc,num,r2,uid,deacc,normQ,money,today,cur,lineNet,eurStr,shade,
+                      wbDrivers,wbDriverNames,wbDriverDocs});
 
 /* ===================== boot ===================== */
 function boot(){

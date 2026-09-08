@@ -72,16 +72,47 @@ resolved silently** — if the row moved under us while we also had local edits,
 the app stops and asks which side wins. Same on first connect to a workspace
 that already holds data.
 
-The SQL to create the table is in the app (Settings → *SQL lentelei sukurti*).
+**The table name is configurable**, and that is the cheap way in: point it at a
+table you already have with `id text primary key, data jsonb, updated_at, updated_by`
+and an RLS policy for `authenticated`, give this app its own `workspace` id, and
+there is no SQL to run at all. This install does exactly that — it shares the
+ShopFlow project's `workspaces` table under the row id `dedes-baldai-invoices`.
+For a fresh project the `CREATE TABLE` is in the app (Settings → *SQL lentelei
+sukurti*).
+
+### cloud-config.js
+
+An optional, **git-ignored** `cloud-config.js` pre-fills the connection so a new
+device only types the password:
+
+```js
+window.CLOUD_CONFIG = {
+  url:       "https://YOUR-PROJECT.supabase.co",
+  key:       "sb_publishable_… or the anon key",
+  email:     "you@example.com",
+  workspace: "my-company-invoices",
+  table:     "invoice_workspaces",
+};
+```
+
+Copy `cloud-config.example.js` and fill it in. It never holds a password. It is
+git-ignored on purpose: the anon key reads nothing on its own (RLS), but there is
+no reason to advertise the account in a public repo — copy the file onto each
+device, or add it to a Pages deploy if you want the hosted app to auto-connect.
 
 ## Važtaraštis (consignment note)
 
 The shipping document that travels with the goods, carrying what the Kelių
 transporto kodeksas 29 str. and the vidaus vežimo taisyklės ask for: three
 parties (**siuntėjas / vežėjas / gavėjas**), the route with loading and delivery
-dates, vehicle, trailer, driver and licence, the cargo with packages, gross
-weight and value, instructions, and **three signature blocks** — handed over,
-taken for carriage, received.
+dates, vehicle, trailer, **one or more drivers** with their licence numbers, the cargo
+with packages, gross weight and value, instructions, and **three signature
+blocks** — handed over, taken for carriage, received.
+
+A two-up crew is normal on a long haul, so drivers are a list: add a row per
+driver, or pick them from the driver list in Settings. The printed note joins the
+names, joins the licence numbers, switches its label to *Vairuotojai*, and names
+the whole crew on the carrier signature line.
 
 The fast path is one click. Open an invoice, hit **Sukurti važtaraštį**: the
 seller becomes the consignor, the buyer the consignee, the delivery address is
@@ -128,7 +159,7 @@ of querying them live from the browser.
 
 ```bash
 python3 serve.py &
-open http://localhost:8741/test.html        # 263 in-browser assertions
+open http://localhost:8741/test.html        # 287 in-browser assertions
 python3 tools/e2e/e2e.py                    # headless Chrome, real registry
 ```
 
@@ -162,5 +193,7 @@ land in `tools/e2e/shots/`.
 - Do **not** reset test state with `localStorage.clear()` + reload: the app saves
   on `beforeunload`, so the reload writes the old state straight back. Use
   `adopt({}); saveNow()` instead — `tools/e2e/e2e.py` does.
+- Waybill drivers are a list (`w.drivers[]`). `wbDrivers()` also reads a legacy
+  single `driver`/`driverDoc` document, so never touch those fields directly.
 - Invoices and važtaraščiai keep **separate counters** (`next` / `wbNext`) and
   separate formats. `formatNo()` is the shared formatter.

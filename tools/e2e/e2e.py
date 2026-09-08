@@ -87,18 +87,21 @@ with Chrome(width=1440, height=980, dpr=1, mobile=False, port=9341,
     r = c.eval("""(function(){
       S.settings.wbPlace='Vilnius';
       S.fleet=[{id:'f1',plate:'JAG 470',make:'Mercedes Sprinter',trailer:''}];
-      S.drivers=[{id:'d1',name:'Jonas Jonaitis',doc:'AA123456'}];
+      S.drivers=[{id:'d1',name:'Jonas Jonaitis',doc:'AA123456'},
+                 {id:'d2',name:'Petras Petraitis',doc:'BB998877'}];
       newWaybill(S.invoices[0]);
       WB.lines[0].packs=6; WB.lines[0].weight=241.5;
       WB.lines[1].packs=2; WB.lines[1].weight=98.4;
-      WB.vehicle='JAG 470 Mercedes Sprinter'; WB.driver='Jonas Jonaitis'; WB.driverDoc='AA123456';
+      WB.vehicle='JAG 470 Mercedes Sprinter';
+      WB.drivers=[{name:'Jonas Jonaitis',doc:'AA123456'},{name:'Petras Petraitis',doc:'BB998877'}];
       WB.unloadDate=addDays(today(),1);
       var okSave=commitWaybill();
       var tt=wbTotals(S.waybills[0]);
       return {okSave:okSave,no:WB.no,linked:WB.invoiceId===S.invoices[0].id,
               consignee:WB.consignee.name,consigneeCode:WB.consignee.code,
               unload:WB.unloadAddr,packs:tt.packs,weight:tt.weight,value:tt.value,
-              cargo:WB.lines.length,wbNext:S.settings.wbNext,invNext:S.settings.next};
+              cargo:WB.lines.length,wbNext:S.settings.wbNext,invNext:S.settings.next,
+              crew:wbDrivers(WB).length,crewNames:wbDriverNames(WB)};
     })()""")
     print("   ", json.dumps(r, ensure_ascii=False)[:340])
     expect(r.get("okSave") is True, "waybill saved")
@@ -111,6 +114,8 @@ with Chrome(width=1440, height=980, dpr=1, mobile=False, port=9341,
     expect(r.get("packs") == 8, "packages summed", r.get("packs"))
     expect(abs(r.get("weight", 0) - 339.9) < 0.01, "gross weight summed", r.get("weight"))
     expect(abs(r.get("value", 0) - 5130) < 0.01, "cargo value equals the invoice net", r.get("value"))
+    expect(r.get("crew") == 2, "a two-driver crew is held", r.get("crew"))
+    expect(r.get("crewNames") == "Jonas Jonaitis, Petras Petraitis", "both names joined", r.get("crewNames"))
 
     print("— printed važtaraštis")
     r = c.eval("""(function(){
@@ -124,6 +129,8 @@ with Chrome(width=1440, height=980, dpr=1, mobile=False, port=9341,
               consignee:d.indexOf('MAXIMA LT, UAB')>=0,
               vehicle:d.indexOf('JAG 470 Mercedes Sprinter')>=0,
               driver:d.indexOf('Jonas Jonaitis')>=0,
+              driver2:d.indexOf('Petras Petraitis')>=0,
+              licences:d.indexOf('AA123456')>=0 && d.indexOf('BB998877')>=0,
               invoiceRef:d.indexOf(S.invoices[0].no)>=0,
               sigs:(d.match(/class="sig"/g)||[]).length,
               rows:(d.match(/<tr><td class="c">\\d+<\\/td>/g)||[]).length};
@@ -133,10 +140,25 @@ with Chrome(width=1440, height=980, dpr=1, mobile=False, port=9341,
     expect(r.get("consignor"), "consignor printed")
     expect(r.get("consignee"), "consignee printed")
     expect(r.get("vehicle"), "vehicle printed")
-    expect(r.get("driver"), "driver printed")
+    expect(r.get("driver") and r.get("driver2"), "both drivers printed")
+    expect(r.get("licences"), "both licence numbers printed")
     expect(r.get("invoiceRef"), "related invoice number printed")
     expect(r.get("sigs") == 3, "three signature blocks", r.get("sigs"))
     expect(r.get("rows") == 2, "both cargo rows printed", r.get("rows"))
+
+    print("— cloud config")
+    r = c.eval("(function(){var d=Cloud.defaults();"
+               "return {preset:Cloud.preset(),url:d.url,ws:d.workspace,table:d.table,"
+               "hasKey:(d.key||'').length>20,email:d.email,tableFallback:(Cloud.cfg=null,Cloud.table())};})()")
+    print("   ", json.dumps(r, ensure_ascii=False))
+    expect(r.get("tableFallback") == "invoice_workspaces", "table falls back when unconfigured")
+    if r.get("preset"):
+        expect(r.get("url", "").startswith("https://"), "preset carries a project URL")
+        expect(r.get("hasKey"), "preset carries a key")
+        expect(r.get("ws"), "preset names a workspace id")
+        print("    (cloud-config.js present: %s / %s)" % (r.get("ws"), r.get("table")))
+    else:
+        print("    (no cloud-config.js on this machine - preset checks skipped)")
 
     print("— screens")
     for view, name in [("dash", "1-dashboard"), ("invoices", "2-invoices"),

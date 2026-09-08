@@ -3,3 +3,6 @@ data/jar.csv
 data/vat.csv
 .DS_Store
 tools/e2e/shots/
+
+# Device-local cloud credentials (see cloud-config.example.js)
+cloud-config.js
