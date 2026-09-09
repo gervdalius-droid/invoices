@@ -765,7 +765,7 @@ function tests(W,D){
 function rest2(W,D){
   /* ---------------------------------------------------------------- */
   grp('export everything (ZIP)');
-  return zipTests(W).then(()=>{
+  return zipTests(W).then(()=>xlsxTests(W)).then(()=>{
 
   /* ---------------------------------------------------------------- */
   grp('registry');
@@ -836,6 +836,143 @@ function rest2(W,D){
 
 /* The ZIP is parsed back out of the produced blob, so these check the archive
    a user actually receives rather than the array we fed in. */
+/* Build a real .xlsx in the browser with the app's own ZIP writer, so the
+   reader is tested against a genuine deflated archive and not a fixture. */
+function xlsxBytes(W,sheets){
+  const MAIN='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const REL='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const PKG='http://schemas.openxmlformats.org/package/2006/relationships';
+  const strings=[],seen=new Map();
+  const si=v=>{const k=String(v);if(!seen.has(k)){seen.set(k,strings.length);strings.push(k);}return seen.get(k);};
+  const x=v=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const col=n=>{let s='';n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=(n-m-1)/26;}return s;};
+  const body=(rows,inline)=>'<?xml version="1.0" encoding="UTF-8"?>'+
+    `<worksheet xmlns="${MAIN}"><sheetData>`+rows.map((r,ri)=>
+      `<row r="${ri+1}">`+r.map((v,ci)=>{
+        if(v===''||v==null)return '';
+        const ref=col(ci)+(ri+1);
+        if(typeof v==='number')return `<c r="${ref}"><v>${v}</v></c>`;
+        return inline?`<c r="${ref}" t="inlineStr"><is><t>${x(v)}</t></is></c>`
+                     :`<c r="${ref}" t="s"><v>${si(v)}</v></c>`;
+      }).join('')+'</row>').join('')+'</sheetData></worksheet>';
+  const bodies=sheets.map((sh,i)=>body(sh.rows,i>0));   /* sheet 2 uses inline strings */
+  const files=[
+    {name:'xl/workbook.xml',text:'<?xml version="1.0" encoding="UTF-8"?>'+
+      `<workbook xmlns="${MAIN}" xmlns:r="${REL}"><sheets>`+
+      sheets.map((sh,i)=>`<sheet name="${x(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')+
+      '</sheets></workbook>'},
+    {name:'xl/_rels/workbook.xml.rels',text:'<?xml version="1.0" encoding="UTF-8"?>'+
+      `<Relationships xmlns="${PKG}">`+sheets.map((sh,i)=>
+      `<Relationship Id="rId${i+1}" Type="${REL}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')+
+      '</Relationships>'},
+    {name:'xl/sharedStrings.xml',text:'<?xml version="1.0" encoding="UTF-8"?>'+
+      `<sst xmlns="${MAIN}" count="${strings.length}" uniqueCount="${strings.length}">`+
+      strings.map(v=>`<si><t>${x(v)}</t></si>`).join('')+'</sst>'}
+  ];
+  bodies.forEach((b,i)=>files.push({name:'xl/worksheets/sheet'+(i+1)+'.xml',text:b}));
+  return W.makeZip(files).then(blob=>blob.arrayBuffer());
+}
+
+async function xlsxTests(W){
+  grp('reading .xlsx in the browser');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.series='SF';W.S.settings.next=1;
+  W.S.settings.term=14;W.S.settings.vatRate=21;
+  const book=await xlsxBytes(W,[
+    {name:'Sąskaitos',rows:[
+      ['Serija','Serijos numeris','Data','Pirkėjas','Adresas','Įm. kodas','PVM kodas','El. paštas','Nuolaida','Suma be PVM','PVM','Kaina'],
+      ['DBSF','0002851','2026-01-05','MB "Leto projektai"','Vilnius','303177592','LT100009036810','a@b.lt',0,461,96.81,557.81],
+      /* a net back-computed from a round gross: 21% of it lands a cent high */
+      ['DBSF','0002870','2026-02-10','Stansefabrikken, UAB','Ukmergė','111798718','LT117987113','',0,15880.17,3334.83,19215],
+      ['DBSF','0002889','2026-03-01','Vygantas Dabužinskas','',''       ,''      ,'',0,269,56.49,325.49],
+      ['DBSFIS','26','2026-08-28','Sigita Izmailkova','','','','',0,3950,829.5,4779.5]]},
+    {name:'Mokėjimai',rows:[
+      ['Mokėjimo data','Sąskaitos serija','Sąskaitos serijos numeris','Mokėtojas','Mokėjimo tipas','Sumokėta'],
+      ['2026-01-20','DBSF','0002851','R. G.','Mokama pervedimu',557.81],
+      ['2026-02-28','DBSF','0002870','R. G.','Mokama pervedimu',19215],
+      ['2026-09-01','DBSFIS','26','R. G.','Mokama pervedimu',4779.5]]}
+  ]);
+  ok('the workbook is a zip we can open', W.readZip(book).size>=4);
+  ok('and it holds the sheet XML', W.readZip(book).has('xl/worksheets/sheet1.xml'));
+  const sheets=await W.readXlsx(book);
+  eq('both sheets read', sheets.length, 2);
+  eq('sheet names kept', sheets[0].name, 'Sąskaitos');
+  eq('shared strings resolved', sheets[0].rows[1][3], 'MB "Leto projektai"');
+  eq('inline strings resolved', sheets[1].rows[1][4], 'Mokama pervedimu');
+  eq('blank trailing rows dropped', sheets[0].rows.length, 5);
+
+  const raw=W.xlsxInvoices(sheets),list=raw.map(W.normaliseImported);
+  eq('every invoice row became an invoice', list.length, 4);
+  eq('series and number joined', list[0].no, 'DBSF 0002851');
+  eq('buyer email carried', list[0].buyer.email, 'a@b.lt');
+  eq('a buyer with no code is a person', list[2].buyer.kind, 'person');
+  near('totals match the workbook', W.calc(list[0]).total, 557.81);
+  eq('the register makes one line', list[0].lines.length, 1);
+  /* the rounding case: 15880.17 + 21% = 19215.01, but the document said 19215 */
+  eq('a rounding line is added where the arithmetic drifts', list[1].lines.length, 2);
+  near('and the total then matches the document', W.calc(list[1]).total, 19215);
+  near('the drift is a cent', list[1].lines[1].price, -0.01);
+  eq('the second series is a proforma', list[3].type, 'proforma');
+  eq('the main series is not', list[0].type, 'invoice');
+
+  eq('payments came off the second sheet', list[0].payments.length, 1);
+  near('payment amount', list[0].payments[0].amount, 557.81);
+  eq('payment date', list[0].payments[0].date, '2026-01-20');
+  eq('paid invoice reads as paid', W.invStatus(list[0]), 'paid');
+  eq('the cent-drift invoice is settled too', W.invStatus(list[1]), 'paid');
+  eq('an invoice with no payment is not', W.calc(list[2]).due>0, true);
+  /* no due-date column: the app's own term is used, not the invoice date */
+  eq('due date follows the settings term', list[2].dueDate, '2026-03-15');
+  eq('so an unpaid recent invoice is not instantly overdue', list[2].term, 14);
+
+  const plan=W.importPlan(list);
+  eq('all four are new', plan.fresh.length, 4);
+  eq('four buyers', plan.newCust.length, 4);
+  W.applyImport(plan,{adoptNumbering:true,syncPayments:true});
+  eq('imported', W.S.invoices.length, 4);
+  eq('numbering follows the main series', W.S.settings.series, 'DBSF');
+  eq('next number', W.S.settings.next, 2890);
+
+  /* a file that is not a zip, and a zip that is not a workbook */
+  let threw='';
+  try{W.readZip(new Uint8Array([1,2,3,4,5]).buffer);}catch(e){threw=String(e.message);}
+  ok('a non-zip is refused', threw.length>0);
+  const notBook=await W.makeZip([{name:'hello.txt',text:'hi'}]).then(b=>b.arrayBuffer());
+  let threw2='';
+  try{await W.readXlsx(notBook);}catch(e){threw2=String(e.message);}
+  ok('a zip without a workbook is refused', threw2.length>0);
+  W.S.invoices=[];W.S.customers=[];W.S.settings.series='SF';W.S.settings.next=1;
+
+  grp('spreadsheet-shaped CSV');
+  /* the same register logic reached through the CSV path */
+  const reg='Nr;Data;Pirkejas;Suma be PVM;PVM %\n'+
+            'A-1;2026-04-01;UAB Testas;100;21\n';
+  const r1=W.parseImportDoc(reg,'r.csv').invoices;
+  near('rate column is read, not assumed', W.calc(r1[0]).total, 121);
+  const reg9='Nr;Data;Pirkejas;Suma be PVM;PVM %\n'+
+             'A-2;2026-04-01;UAB Testas;100;9\n';
+  near('a 9% rate survives', W.calc(W.parseImportDoc(reg9,'r.csv').invoices[0]).total, 109);
+  /* gross only: used to be refused outright */
+  const gross='Nr;Data;Pirkejas;Viso su PVM\nA-3;2026-04-01;UAB Testas;121\n';
+  const g=W.parseImportDoc(gross,'g.csv').invoices;
+  eq('a gross-only register imports', g.length, 1);
+  near('and the gross is preserved exactly', W.calc(g[0]).total, 121);
+  near('with the net derived from it', W.calc(g[0]).net, 100);
+  /* a "PVM" column holding a rate rather than an amount is caught by the sums */
+  const rateCol='Nr;Data;Pirkejas;Suma be PVM;PVM;Viso su PVM\nA-4;2026-04-01;UAB T;100;21;121\n';
+  near('a rate hiding in a PVM column still totals right',
+       W.calc(W.parseImportDoc(rateCol,'x.csv').invoices[0]).total, 121);
+  const sumCol='Nr;Data;Pirkejas;Suma be PVM;PVM;Viso su PVM\nA-5;2026-04-01;UAB T;100;21;121\n';
+  eq('one line, not two, when nothing drifts',
+     W.parseImportDoc(sumCol,'x.csv').invoices[0].lines.length, 1);
+  /* dates in the shapes a spreadsheet emits */
+  eq('ISO date kept', W.toIso('2026-01-15'), '2026-01-15');
+  eq('dotted date', W.toIso('2026.01.15'), '2026-01-15');
+  eq('day-first date', W.toIso('15/01/2026'), '2026-01-15');
+  eq('an Excel serial', W.toIso('46023'), '2026-01-01');
+  eq('nonsense is left alone', W.toIso('rytoj'), 'rytoj');
+  W.S.invoices=[];W.S.customers=[];
+}
+
 async function zipTests(W){
   W.S.invoices=[{id:'i1',no:'SF-2026-0001',date:'2026-01-05',dueDate:'2026-01-19',
     buyer:{name:'UAB Pirkėjas',code:'123456789',vat:'LT123456715',address:'Vilnius'},

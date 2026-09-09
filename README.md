@@ -64,8 +64,8 @@ or **CSV**.
 
 Settings → **Importuoti sąskaitas**. It **merges** — nothing is deleted, and
 invoice numbers you already hold are skipped, so re-running the same file is
-safe. It accepts this app's own backup, a generic CSV, and the JSON produced by
-`tools/import_pdf.py` or `tools/import_xlsx.py`. Buyers become customers
+safe. It accepts **an .xlsx workbook**, a generic CSV, this app's own backup, and
+the JSON produced by `tools/import_pdf.py`. Buyers become customers
 (deduplicated by company code, then by name), and the preview shows exactly what
 will land before you confirm.
 
@@ -83,32 +83,51 @@ after importing a book ending at `DBSF 0002943` the next invoice you write is
 
 ### The accounting export (XLSX)
 
-`tools/import_xlsx.py` converts the two-sheet workbook the previous app exports
-— `Sąskaitos` and `Mokėjimai` — into that JSON, payments included:
+**Drop the workbook straight into the dialog** — no converter, no command line.
+An .xlsx is a zip of XML, so the app opens it in the browser: `readZip()` walks
+the central directory, `DecompressionStream('deflate-raw')` inflates the entries
+(the mirror of the ZIP writer that builds "export everything"), and `readXlsx()`
+turns the sheets into plain rows. Shared strings, inline strings and numbers are
+read; formatting is ignored.
 
-```bash
-python3 tools/import_xlsx.py BOOK.xlsx -o import.json
-```
+The two-sheet export the previous app produces — `Sąskaitos` and `Mokėjimai` —
+is understood as a whole: the payments sheet is matched to the invoice sheet by
+`SERIJA NUMERIS` (`DBSF 0002851`), which is also the shape `import_pdf.py` emits,
+so payments land on invoices that came in from the PDF.
 
-Standard library only: the workbook is unzipped and its sheet XML read directly,
-no openpyxl. Columns are found by header name rather than position, and invoice
-numbers are built as `SERIJA NUMERIS` (`DBSF 0002851`) — the same shape
-`import_pdf.py` emits, which is what lets the payments land on invoices that came
-in from the PDF.
+Sheets are found by what their header row contains, never by name or position, and
+one builder handles both shapes a sheet can have: **one row per line** (an item or
+quantity column present) or **one row per invoice** — a register, whose money
+columns are invoice totals, so `Kaina` there is the gross rather than a unit price.
+
+`tools/import_xlsx.py` does the same conversion offline if you would rather have
+the JSON (`python3 tools/import_xlsx.py BOOK.xlsx -o import.json`), standard
+library only — no openpyxl.
 
 Two things the workbook forces:
 
 - It has **no line items**, only invoice totals, so each invoice gets a single
   line priced at `Suma be PVM`. Anything already in the app keeps its own lines.
+  It carries no payment term either, so the due date is the invoice date plus the
+  term in Settings — using the invoice date itself would file every unpaid
+  invoice as overdue the moment it landed.
 - Some totals were back-computed from a round gross (`19 215,00`), so recomputing
   21% VAT from the stored net lands a cent away from the document that was
   actually sent — and the matching payment would leave the invoice *part paid*
   forever. Those get a visible `Apvalinimas` line of ∓0.01 so the total, and
-  therefore the balance, matches the customer's copy. Every one is listed in the
-  run's output.
+  therefore the balance, matches the customer's copy.
 
-A second series ending in `IS` (`DBSFIS`) is imported as **išankstinė sąskaita**
-— `--proforma-series ''` turns that off, or name the series explicitly.
+A second series ending in `IS` (`DBSFIS`) is imported as **išankstinė sąskaita**.
+
+Column names are matched **exact-first, then by prefix, one column to one key**:
+`PVM` is a VAT amount and `PVM kodas` a VAT number, and a single pass in table
+order let the second swallow the first. `%` survives normalisation for the same
+reason — it is the only thing separating `PVM %` (a rate) from `PVM` (a sum). If
+a sheet gives net, VAT and total, and the three only add up when the VAT column
+is read as a *rate*, the arithmetic wins over the header.
+
+Dates are accepted as `2026-01-15`, `2026.01.15`, `15/01/2026` or an Excel serial;
+anything else is passed through untouched rather than guessed at.
 
 ### Invoice books that only exist as PDF
 
@@ -259,9 +278,13 @@ of querying them live from the browser.
 
 ```bash
 python3 serve.py &
-open http://localhost:8741/test.html        # 391 in-browser assertions
+open http://localhost:8741/test.html        # 436 in-browser assertions
 python3 tools/e2e/e2e.py                    # headless Chrome, real registry
 ```
+
+The .xlsx reader is tested against a workbook **built in the browser by the
+app's own ZIP writer**, so a real deflated archive goes through the real reader
+with no fixture file in the repo.
 
 `test.html` drives the app inside an iframe; the cloud and ZIP groups are async,
 so the suite returns a promise the harness awaits. Top-level `const`/`let` live in the

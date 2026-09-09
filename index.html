@@ -540,9 +540,14 @@ const I18N={
 
   /* import */
   impTitle:"Importuoti sąskaitas",
-  impHint:"Sąskaitos pridedamos prie esamų — nieko neištrinama. Tokie patys numeriai praleidžiami.",
+  impHint:"Sąskaitos pridedamos prie esamų — nieko neištrinama. Tokie patys numeriai praleidžiami, bet jų mokėjimai perkeliami.",
   impDrop:"Vilkite failą arba spustelėkite",
-  impFormats:"JSON (atsarginė kopija arba tools/import_pdf.py rezultatas) · CSV",
+  impFormats:"Excel (.xlsx — sąskaitos ir mokėjimai) · CSV · JSON atsarginė kopija",
+  impRounding:"Apvalinimas",impReading:"Skaitomas failas…",
+  impBadZip:"Failo nepavyko atidaryti — ar tai tikrai .xlsx?",
+  impNotXlsx:"Tai ne Excel darbaknygė",
+  impNoInflate:"Naršyklė nemoka išpakuoti .xlsx — įrašykite CSV formatu",
+  impOldXls:"Senas .xls formatas nepalaikomas — įrašykite kaip .xlsx arba CSV",
   impNew:"Naujos sąskaitos",impCustomers:"Nauji pirkėjai",impCustomersSub:"bus sukurti",
   impDupes:"Praleista (jau yra)",impMore:"dar",
   impAdopt:"Tęsti numeraciją nuo importuotų",
@@ -767,9 +772,14 @@ const I18N={
 
   /* import */
   impTitle:"Import invoices",
-  impHint:"Invoices are added to what you have — nothing is deleted. Numbers you already hold are skipped.",
+  impHint:"Invoices are added to what you have — nothing is deleted. Numbers you already hold are skipped, but their payments are carried over.",
   impDrop:"Drop a file or click",
-  impFormats:"JSON (a backup, or the output of tools/import_pdf.py) · CSV",
+  impFormats:"Excel (.xlsx — invoices and payments) · CSV · JSON backup",
+  impRounding:"Rounding",impReading:"Reading the file…",
+  impBadZip:"Could not open the file — is it really an .xlsx?",
+  impNotXlsx:"That is not an Excel workbook",
+  impNoInflate:"This browser cannot unpack .xlsx — save the sheet as CSV instead",
+  impOldXls:"The old .xls format is not supported — save it as .xlsx or CSV",
   impNew:"New invoices",impCustomers:"New customers",impCustomersSub:"will be created",
   impDupes:"Skipped (already here)",impMore:"more",
   impAdopt:"Continue numbering from the imported run",
@@ -1071,6 +1081,24 @@ function fmtDate(iso){
   return LANG==='lt'?iso:new Date(iso+'T00:00:00Z').toLocaleDateString('en-GB',{timeZone:'UTC'});
 }
 function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/864e5);}
+const isIso=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''));
+/* Imported dates arrive as ISO text, as 2026.01.15 or 15/01/2026, or — from a
+   real spreadsheet date cell — as a serial day count. Anything not recognised
+   is handed back untouched rather than guessed at. */
+function toIso(v){
+  const x=String(v==null?'':v).trim();
+  if(!x)return '';
+  if(isIso(x))return x;
+  let m=/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/.exec(x);
+  if(m)return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+  m=/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(x);            /* day first, as LT and en-GB write it */
+  if(m)return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+  if(/^\d{4,6}(\.\d+)?$/.test(x)){                            /* Excel serial, 1900 leap bug included */
+    const d=new Date(Date.UTC(1899,11,30)+Math.floor(parseFloat(x))*864e5);
+    if(!isNaN(d))return d.toISOString().slice(0,10);
+  }
+  return x;
+}
 const LT_MONTHS=['sausis','vasaris','kovas','balandis','gegužė','birželis',
                  'liepa','rugpjūtis','rugsėjis','spalis','lapkritis','gruodis'];
 /* "2026-01" -> "2026 m. sausis" / "January 2026" */
@@ -3422,20 +3450,34 @@ function periodModal(){
    from a printed invoice book, and a generic CSV.
    ========================================================================= */
 const IMPORT_ALIASES={
-  no:['nr','no','numeris','number','saskaitos nr','saskaitos numeris','invoice','dokumentas'],
+  no:['nr','no','numeris','number','serijos numeris','saskaitos nr','saskaitos numeris',
+      'invoice','dokumentas'],
+  series:['serija','series'],
   date:['data','date','saskaitos data','issue date','israsymo data'],
   due:['terminas','apmoketi iki','due','due date','apmokejimo terminas'],
   buyer:['pirkejas','buyer','klientas','customer','gavejas'],
   code:['imones kodas','im kodas','kodas','company code','reg no'],
-  vat:['pvm kodas','pvm moketojo kodas','vat','vat no'],
+  vat:['pvm kodas','pvm moketojo kodas','vat no','vat code'],
   address:['adresas','address'],
+  email:['el pastas','elektroninis pastas','email','e mail'],
   item:['pavadinimas','preke','paslauga','description','item'],
   qty:['kiekis','qty','quantity'],
   unit:['matas','mato vnt','vnt','unit'],
-  price:['kaina','kaina be pvm','price','vieneto kaina'],
+  disc:['nuolaida','discount'],
+  price:['kaina be pvm','vieneto kaina','price','kaina'],
   net:['suma be pvm','net','suma'],
-  rate:['pvm %','pvm proc','vat %','tarifas'],
-  total:['viso','bendra suma','is viso','total','viso su pvm']
+  rate:['pvm %','pvm proc','vat %','vat rate','tarifas'],
+  vatsum:['pvm','pvm suma','vat amount','vat sum'],
+  total:['viso su pvm','viso','bendra suma','is viso','total'],
+  paid:['apmoketa','sumoketa','paid']
+};
+/* the payments sheet of an accounting export */
+const PAY_ALIASES={
+  payDate:['mokejimo data','apmokejimo data','payment date'],
+  series:['saskaitos serija','serija'],
+  no:['saskaitos serijos numeris','saskaitos numeris','saskaitos nr'],
+  kind:['mokejimo tipas','payment type','budas'],
+  amount:['sumoketa','apmoketa','amount','paid','suma']
 };
 function csvRows(text){
   text=text.replace(/^﻿/,'');
@@ -3455,13 +3497,28 @@ function csvRows(text){
   if(cell||row.length){row.push(cell);out.push(row);}
   return out.filter(r=>r.some(c=>String(c).trim()));
 }
-function mapHeaders(head){
-  const idx={};
-  head.forEach((h,i)=>{
-    const n=normQ(h).replace(/[.,()€%]/g,'').replace(/\s+/g,' ').trim();
-    for(const key in IMPORT_ALIASES)
-      if(idx[key]===undefined&&IMPORT_ALIASES[key].some(a=>n===a||n.startsWith(a)))idx[key]=i;
-  });
+const normHead=h=>normQ(h).replace(/[.,()€]/g,'').replace(/%/g,' %')
+                          .replace(/\s+/g,' ').trim();
+/* Exact matches are taken before prefix ones, and a column answers to one key
+   only: "PVM" is a rate and "PVM kodas" a VAT number, and a single pass in
+   table order lets the second swallow the first. */
+function mapHeaders(head,table){
+  table=table||IMPORT_ALIASES;
+  const idx={},taken={},cells=(head||[]).map(normHead);
+  for(let pass=0;pass<2;pass++)
+    for(const key in table){
+      if(idx[key]!==undefined)continue;
+      for(const raw of table[key]){
+        const a=normHead(raw);
+        if(!a)continue;
+        let hit=-1;
+        for(let i=0;i<cells.length;i++){
+          if(taken[i])continue;
+          if(pass?cells[i].indexOf(a)===0:cells[i]===a){hit=i;break;}
+        }
+        if(hit>=0){idx[key]=hit;taken[hit]=1;break;}
+      }
+    }
   return idx;
 }
 /* Any supported file -> a plain list of invoice objects in this app's shape. */
@@ -3473,36 +3530,132 @@ function parseImportDoc(text,name){
     if(!Array.isArray(list)||!list.length)throw new Error(t('impNoInvoices'));
     return {invoices:list.map(normaliseImported),source:(j&&j.source)||name};
   }
-  const rows=csvRows(text);
-  if(rows.length<2)throw new Error(t('impNoInvoices'));
+  return {invoices:rowsToInvoices(csvRows(text)).map(normaliseImported),source:name};
+}
+const tidyRate=r=>Math.abs(r-Math.round(r))<0.02?Math.round(r):r2(r);
+/* A book can hold two series — "DBSF" invoices and "DBSFIS" išankstinės
+   sąskaitos. Only the printed title differs, but a proforma should not read
+   as a VAT invoice. */
+function markProformas(list){
+  const counts={};
+  list.forEach(i=>{if(i.series)counts[i.series]=(counts[i.series]||0)+1;});
+  const names=Object.keys(counts);
+  if(names.length<2)return;
+  const main=names.reduce((a,b)=>counts[b]>counts[a]?b:a);
+  list.forEach(i=>{if(i.series&&i.series!==main&&/is$/i.test(i.series))i.type='proforma';});
+}
+/* Rows -> invoices, for a CSV and for a spreadsheet sheet alike.
+   One row per line, or one row per invoice: a sheet with no item/quantity
+   column is a register, and its money columns are invoice totals — so "Kaina"
+   there is the gross, not a unit price. */
+function rowsToInvoices(rows){
+  if(!rows||rows.length<2)throw new Error(t('impNoInvoices'));
   const idx=mapHeaders(rows[0]);
   if(idx.no===undefined)throw new Error(t('impNoColumn'));
-  const byNo=new Map();
+  const cell=(r,k)=>idx[k]===undefined?'':String(r[idx[k]]==null?'':r[idx[k]]).trim();
+  const has=(r,k)=>idx[k]!==undefined&&cell(r,k)!=='';
+  const lineMode=idx.item!==undefined||idx.qty!==undefined;
+  const grossKey=idx.total!==undefined?'total':(lineMode?'':'price');
+  const unit=()=>S.settings.unit||'vnt';
+  const byNo=new Map(),order=[];
   rows.slice(1).forEach(r=>{
-    const no=String(r[idx.no]||'').trim();
-    if(!no)return;
+    const number=cell(r,'no');
+    if(!number)return;
+    const series=cell(r,'series');
+    const no=series&&number.indexOf(series)!==0?series+' '+number:number;
     let inv=byNo.get(no);
     if(!inv){
-      inv={no,date:(r[idx.date]||'').trim(),dueDate:(r[idx.due]||'').trim(),
-           buyer:{name:(r[idx.buyer]||'').trim(),code:(r[idx.code]||'').trim(),
-                  vat:(r[idx.vat]||'').trim(),address:(r[idx.address]||'').trim(),
-                  phone:'',email:'',contact:'',kind:'company'},
+      const code=cell(r,'code');
+      inv={no,series,seq:num(String(number).replace(/\D/g,''))||0,
+           date:cell(r,'date'),dueDate:cell(r,'due'),
+           buyer:{name:cell(r,'buyer'),code,vat:cell(r,'vat'),address:cell(r,'address'),
+                  email:cell(r,'email'),phone:'',contact:'',kind:code?'company':'person'},
            lines:[],type:'invoice',currency:cur(),status:'sent',payments:[]};
-      byNo.set(no,inv);
+      byNo.set(no,inv);order.push(inv);
     }
-    const nm=idx.item!==undefined?String(r[idx.item]||'').trim():'';
-    const qty=idx.qty!==undefined?num(r[idx.qty]):0;
-    const price=idx.price!==undefined?num(r[idx.price]):0;
-    const net=idx.net!==undefined?num(r[idx.net]):0;
-    const rate=idx.rate!==undefined?num(r[idx.rate]):num(S.settings.vatRate);
-    if(nm||qty||price||net){
-      inv.lines.push({name:nm||t('impLineFallback'),qty:qty||1,unit:(r[idx.unit]||'').trim()||S.settings.unit,
-                      price:price||(qty?r2(net/qty):net),disc:0,vat:rate});
+    const rate=has(r,'rate')?num(cell(r,'rate')):null;
+    if(lineMode){
+      const nm=cell(r,'item'),qty=num(cell(r,'qty')),
+            price=num(cell(r,'price')),net=num(cell(r,'net'));
+      if(nm||qty||price||net)
+        inv.lines.push({name:nm||t('impLineFallback'),qty:qty||1,
+                        unit:cell(r,'unit')||unit(),
+                        price:price||(qty?r2(net/qty):net),
+                        disc:num(cell(r,'disc')),
+                        vat:rate==null?num(S.settings.vatRate):rate});
+      return;
+    }
+    const gross=grossKey?num(cell(r,grossKey)):0;
+    const vatsum=num(cell(r,'vatsum'));
+    let net=has(r,'net')?num(cell(r,'net')):0,rt=rate;
+    if(rt==null){
+      /* a bare "PVM" column is normally the VAT amount — but if the three
+         numbers only add up when it is read as a rate, believe the arithmetic */
+      if(net&&vatsum&&gross&&Math.abs(r2(net+vatsum)-gross)>0.02
+                        &&Math.abs(r2(net+r2(net*vatsum/100))-gross)<=0.02)rt=vatsum;
+      else if(net&&vatsum)rt=tidyRate(vatsum/net*100);
+      else rt=num(S.settings.vatRate);
+    }
+    if(!net&&gross)net=r2(gross/(1+rt/100));
+    if(!net&&!gross)return;
+    inv.lines.push({name:t('impLineFallback'),qty:1,unit:unit(),
+                    price:net,disc:num(cell(r,'disc')),vat:rt});
+    /* The book may hold a net back-computed from a round gross, and recomputing
+       VAT from it then lands a cent off the document that was actually sent —
+       which would leave the invoice a cent short of its own payment forever. */
+    if(gross){
+      const drift=r2(gross-r2(net+r2(net*rt/100)));
+      if(drift)inv.lines.push({name:t('impRounding'),qty:1,unit:unit(),
+                               price:drift,disc:0,vat:0});
+    }
+    if(has(r,'paid')){
+      const a=num(cell(r,'paid'));
+      if(a)inv.payments.push({date:cell(r,'due')||cell(r,'date'),amount:a,note:''});
     }
   });
-  const list=Array.from(byNo.values()).filter(i=>i.lines.length);
+  const list=order.filter(i=>i.lines.length);
   if(!list.length)throw new Error(t('impNoInvoices'));
-  return {invoices:list.map(normaliseImported),source:name};
+  markProformas(list);
+  return list;
+}
+/* A workbook: one sheet of invoices, optionally one of payments. */
+function xlsxInvoices(sheets){
+  let book=null,pays=null;
+  (sheets||[]).forEach(sh=>{
+    const rows=sh.rows||[];
+    for(let h=0;h<Math.min(4,rows.length);h++){
+      if(!book){
+        const idx=mapHeaders(rows[h]);
+        if(idx.no!==undefined&&idx.buyer!==undefined
+           &&(idx.net!==undefined||idx.total!==undefined||idx.price!==undefined)){
+          book={name:sh.name,rows:rows.slice(h)};return;
+        }
+      }
+      if(!pays){
+        const idx=mapHeaders(rows[h],PAY_ALIASES);
+        if(idx.amount!==undefined&&idx.no!==undefined&&idx.payDate!==undefined){
+          pays={name:sh.name,rows:rows.slice(h),idx};return;
+        }
+      }
+    }
+  });
+  if(!book)throw new Error(t('impNoInvoices'));
+  const list=rowsToInvoices(book.rows);
+  if(pays){
+    const by=new Map();
+    list.forEach(i=>by.set(normQ(i.no),i));
+    const cell=(r,k)=>pays.idx[k]===undefined?'':String(r[pays.idx[k]]==null?'':r[pays.idx[k]]).trim();
+    pays.rows.slice(1).forEach(r=>{
+      const number=cell(r,'no');
+      if(!number)return;
+      const series=cell(r,'series');
+      const no=series&&number.indexOf(series)!==0?series+' '+number:number;
+      const inv=by.get(normQ(no)),amount=num(cell(r,'amount'));
+      if(!inv||!amount)return;
+      inv.payments.push({date:cell(r,'payDate')||inv.date,amount,note:cell(r,'kind')});
+    });
+  }
+  return list;
 }
 /* Fill in whatever the source did not carry, without inventing figures. */
 function normaliseImported(raw){
@@ -3510,7 +3663,12 @@ function normaliseImported(raw){
   const lines=(raw.lines||[]).map(l=>({
     id:uid(),name:String(l.name||'').trim(),qty:num(l.qty)||0,unit:l.unit||S.settings.unit||'vnt',
     price:num(l.price)||0,disc:num(l.disc)||0,vat:l.vat==null?num(S.settings.vatRate):num(l.vat)}));
-  const date=(raw.date||'').slice(0,10)||today();
+  const date=toIso((raw.date||'').slice(0,10))||today();
+  /* A register export carries no payment term. Falling back to the invoice
+     date would file every unpaid invoice as overdue the moment it lands, so
+     use the term this app issues on. */
+  const due=toIso((raw.dueDate||'').slice(0,10))
+            ||(isIso(date)?addDays(date,S.settings.term|0):date);
   return {
     id:uid(),
     no:String(raw.no||'').trim(),
@@ -3518,8 +3676,8 @@ function normaliseImported(raw){
     seq:num(raw.seq)||num(String(raw.no||'').replace(/\D/g,''))||0,
     type:raw.type||'invoice',
     date,
-    dueDate:(raw.dueDate||'').slice(0,10)||date,
-    term:raw.dueDate?daysBetween(date,(raw.dueDate||'').slice(0,10)):0,
+    dueDate:due,
+    term:isIso(date)&&isIso(due)?daysBetween(date,due):0,
     buyer:{name:String(b.name||'').trim(),code:String(b.code||'').trim(),vat:String(b.vat||'').trim(),
            address:String(b.address||'').trim(),email:b.email||'',phone:b.phone||'',
            contact:b.contact||'',kind:b.kind||'company',note:b.note||''},
@@ -3528,7 +3686,7 @@ function normaliseImported(raw){
     notes:raw.notes||'',currency:raw.currency||cur(),
     status:raw.status||'sent',
     /* an imported payment carries no id, and the payment list deletes by id */
-    payments:(raw.payments||[]).map(p=>({id:uid(),date:String(p.date||'').slice(0,10)||date,
+    payments:(raw.payments||[]).map(p=>({id:uid(),date:toIso(String(p.date||'').slice(0,10))||date,
       amount:num(p.amount),note:p.note||''})).filter(p=>p.amount),
     issuer:raw.issuer||'',receiver:raw.receiver||'',
     imported:true
@@ -3623,7 +3781,8 @@ function importModal(){
     <div class="drop" id="impDrop">
       <div class="big">${esc(t('impDrop'))}</div>
       <div class="muted">${esc(t('impFormats'))}</div>
-      <input type="file" id="impFile" accept=".json,.csv,.txt,application/json,text/csv" style="display:none">
+      <input type="file" id="impFile" style="display:none"
+        accept=".xlsx,.json,.csv,.txt,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
     </div>
     <div id="impPreview"></div>`;
   const preview=()=>{
@@ -3674,14 +3833,24 @@ function importModal(){
   };
   const take=file=>{
     srcName=file.name;
+    const done=list=>{
+      plan=importPlan(list);preview();toast(t('impRead')+' '+list.length);
+    };
+    const fail=e=>{plan=null;preview();toast(String(e.message||e),true);};
+    if(/\.xls$/i.test(file.name)){fail(new Error(t('impOldXls')));return;}
+    /* a spreadsheet is read as bytes, everything else as text */
+    if(/\.xlsx$/i.test(file.name)||(file.type||'').indexOf('spreadsheetml')>=0){
+      $('#impPreview').innerHTML=`<div class="note" style="margin-top:12px">${esc(t('impReading'))}</div>`;
+      file.arrayBuffer()
+        .then(readXlsx)
+        .then(sheets=>done(xlsxInvoices(sheets).map(normaliseImported)))
+        .catch(fail);
+      return;
+    }
     const rd=new FileReader();
     rd.onload=()=>{
-      try{
-        const doc=parseImportDoc(String(rd.result),srcName);
-        plan=importPlan(doc.invoices);
-        preview();
-        toast(t('impRead')+' '+doc.invoices.length);
-      }catch(e){plan=null;preview();toast(String(e.message||e),true);}
+      try{done(parseImportDoc(String(rd.result),srcName).invoices);}
+      catch(e){fail(e);}
     };
     rd.readAsText(file);
   };
@@ -4598,7 +4767,9 @@ Object.assign(window,{t,esc,num,r2,uid,deacc,normQ,money,today,cur,lineNet,eurSt
                       wbDrivers,wbDriverNames,wbDriverDocs,
                       periodRange,weekStart,addMonths,monthStart,csvRows,mapHeaders,
                       expMatch,periodDocHtml,parseImportDoc,importPlan,applyImport,invoiceCsv,
-                      inferFormat,formatNo});
+                      inferFormat,formatNo,rowsToInvoices,xlsxInvoices,readXlsx,readZip,toIso,
+                      normaliseImported,makeZip,monthLabel,invTable,viewFromHash,go,
+                      openModal,closeModal,openInvoice,invStatus,calc,makeNumber});
 Object.defineProperty(window,'EXP',{get:()=>EXP,set:v=>{EXP=v},configurable:true});
 
 /* ===================== boot ===================== */
