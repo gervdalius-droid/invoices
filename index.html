@@ -113,6 +113,13 @@
   th,td{padding:7px 9px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
   thead th{position:sticky;top:0;background:#eef1f5;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);font-weight:650;z-index:1}
   tbody tr.clickable{cursor:pointer}
+  tbody tr.grp td{background:#eef1f5;border-top:1px solid var(--line2);font-weight:650;
+    font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);padding:6px 9px}
+  tbody tr.grp:first-child td{border-top:0}
+  tbody tr.grp .gsum{float:right;font-family:var(--mono);letter-spacing:0;text-transform:none;font-weight:600}
+  /* the table scrolls sideways on a phone, so a floated total would sit off
+     screen — put it under the month name instead */
+  @media(max-width:640px){tbody tr.grp .gsum{float:none;display:block;margin-top:2px}}
   tbody tr.clickable:hover{background:#f3f5f9}
   td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
   td input,td select{padding:4px 6px;border-radius:5px}
@@ -339,7 +346,7 @@ const I18N={
   colNo:"Nr.",colDate:"Data",colCustomer:"Pirkėjas",colDue:"Terminas",colTotal:"Viso su PVM",colPaid:"Apmokėta",colStatus:"Būsena",colAct:"",
   noInvoices:"Sąskaitų dar nėra.",noInvoicesSub:"Paspauskite „Nauja sąskaita“ ir pradėkite.",
   stDraft:"Juodraštis",stSent:"Išsiųsta",stPaid:"Apmokėta",stPart:"Dalinai",stOver:"Pradelsta",
-  filterYear:"Metai",allYears:"Visi metai",
+  filterYear:"Metai",allYears:"Visi metai",allMonths:"Visi mėnesiai",noDate:"Be datos",
   exportCsv:"Eksportuoti CSV",exportSel:"Eksportuoti pažymėtas",
 
   /* editor */
@@ -542,6 +549,10 @@ const I18N={
   impMarkPaid:"Pažymėti visas kaip apmokėtas",
   impMarkedPaid:"Importuota kaip apmokėta",
   impGo:"Importuoti",impDone:"Importuota sąskaitų:",impRead:"Faile rasta sąskaitų:",
+  impUpdated:"Papildyta mokėjimų",impDupesPaid:"iš jų gauna mokėjimus:",
+  impSync:"Perkelti mokėjimus į jau turimas sąskaitas",
+  impUpdatedSub:"Šios sąskaitos jau yra — pridedami tik trūkstami mokėjimai, eilutės nekeičiamos",
+  impDonePaid:"papildyta mokėjimais:",
   impBadJson:"Netinkamas JSON failas",
   impNoInvoices:"Faile sąskaitų nerasta",
   impNoColumn:"CSV neturi numerio stulpelio (Nr.)",
@@ -568,7 +579,7 @@ const I18N={
   colNo:"No.",colDate:"Date",colCustomer:"Buyer",colDue:"Due",colTotal:"Total incl. VAT",colPaid:"Paid",colStatus:"Status",colAct:"",
   noInvoices:"No invoices yet.",noInvoicesSub:"Hit “New invoice” to start.",
   stDraft:"Draft",stSent:"Sent",stPaid:"Paid",stPart:"Partial",stOver:"Overdue",
-  filterYear:"Year",allYears:"All years",
+  filterYear:"Year",allYears:"All years",allMonths:"All months",noDate:"No date",
   exportCsv:"Export CSV",exportSel:"Export selected",
 
   edNew:"New invoice",edEdit:"Invoice",
@@ -765,6 +776,10 @@ const I18N={
   impMarkPaid:"Mark them all as paid",
   impMarkedPaid:"Imported as paid",
   impGo:"Import",impDone:"Invoices imported:",impRead:"Invoices found in the file:",
+  impUpdated:"Payments added",impDupesPaid:"of them gain payments:",
+  impSync:"Add the payments to invoices already here",
+  impUpdatedSub:"These invoices are already here — only the missing payments are added, the lines are untouched",
+  impDonePaid:"payments merged into:",
   impBadJson:"Not valid JSON",
   impNoInvoices:"No invoices found in that file",
   impNoColumn:"The CSV has no number column (Nr.)",
@@ -1056,6 +1071,15 @@ function fmtDate(iso){
   return LANG==='lt'?iso:new Date(iso+'T00:00:00Z').toLocaleDateString('en-GB',{timeZone:'UTC'});
 }
 function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/864e5);}
+const LT_MONTHS=['sausis','vasaris','kovas','balandis','gegužė','birželis',
+                 'liepa','rugpjūtis','rugsėjis','spalis','lapkritis','gruodis'];
+/* "2026-01" -> "2026 m. sausis" / "January 2026" */
+function monthLabel(ym){
+  if(!ym)return '';
+  const y=ym.slice(0,4),m=(+ym.slice(5,7)||1)-1;
+  if(LANG==='lt')return y+' m. '+(LT_MONTHS[m]||'');
+  return new Date(Date.UTC(+y,m,1)).toLocaleDateString('en-GB',{month:'long',year:'numeric',timeZone:'UTC'});
+}
 
 /* Lithuanian diacritics -> ASCII, length preserving, for search + file names. */
 const DIA={'ą':'a','č':'c','ę':'e','ė':'e','į':'i','š':'s','ų':'u','ū':'u','ž':'z'};
@@ -1372,14 +1396,45 @@ function renderTabs(){
   }).join('');
   bar.querySelectorAll('button').forEach(b=>b.onclick=()=>go(b.dataset.tab));
 }
-function go(v){
+function showView(v){
   VIEW=v;
   TABS.forEach(x=>{const el=$('#p-'+x.id);if(el)el.classList.toggle('on',x.id===v);});
   renderTabs();
   render();
   window.scrollTo({top:0,behavior:'instant'in document.documentElement.style?'instant':'auto'});
-  try{location.hash=v==='dash'?'':'#'+v;}catch(e){}
 }
+/* Every move through the app pushes a history entry, so the browser's Back
+   button (and the phone's back gesture) steps back through the views it came
+   from instead of leaving the app on the first press. */
+function go(v,replace){
+  showView(v);
+  const h='#'+v;
+  try{
+    if(replace||location.hash===h)history.replaceState({v},'',h);
+    else history.pushState({v},'',h);
+  }catch(e){try{location.hash=v;}catch(e2){}}
+}
+function viewFromHash(){
+  const h=(location.hash||'').replace('#','')||'dash';
+  const tab=TABS.find(x=>x.id===h);
+  if(!tab)return 'dash';
+  /* the editor tabs only exist while something is open in them */
+  if(tab.hidden&&tab.hidden())return h==='editor'?'invoices':h==='waybill'?'waybills':'dash';
+  return h;
+}
+window.addEventListener('popstate',()=>{
+  /* A dialog is a page as far as the phone's back gesture is concerned: the
+     press closes it and puts the entry back, rather than leaving the view.
+     No entry is pushed when a modal opens — pushing one and then calling
+     history.back() from closeModal races every navigation made from inside
+     a dialog, and those are common here (import, period export, payments). */
+  if($('#scrim').classList.contains('on')){
+    closeModal();
+    try{history.pushState({v:VIEW},'','#'+VIEW);}catch(e){}
+    return;
+  }
+  showView(viewFromHash());
+});
 function render(){
   ({dash:renderDash,invoices:renderInvoices,editor:renderEditor,
     waybills:renderWaybills,waybill:renderWaybill,
@@ -1517,13 +1572,31 @@ function renderDash(){
 }
 
 /* shared invoice table used by dashboard + list */
-function invTable(list,compact){
+function invTable(list,compact,byMonth){
+  const cols=compact?6:7;
+  let month='';
+  const sums={};
+  if(byMonth)list.forEach(i=>{
+    const ym=(i.date||'').slice(0,7),c=calc(i),a=sums[ym]||(sums[ym]={n:0,total:0,due:0});
+    a.n++;a.total=r2(a.total+c.total);a.due=r2(a.due+c.due);
+  });
   return `<table><thead><tr>
     <th>${esc(t('colNo'))}</th><th>${esc(t('colDate'))}</th><th>${esc(t('colCustomer'))}</th>
     <th>${esc(t('colDue'))}</th><th class="num">${esc(t('colTotal'))}</th>
     ${compact?'':`<th class="num">${esc(t('colPaid'))}</th>`}
     <th>${esc(t('colStatus'))}</th></tr></thead><tbody>
     ${list.map(i=>{
+      let head='';
+      if(byMonth){
+        const ym=(i.date||'').slice(0,7);
+        if(ym!==month){
+          month=ym;
+          const a=sums[ym]||{n:0,total:0,due:0};
+          head=`<tr class="grp"><td colspan="${cols}">${esc(monthLabel(ym)||t('noDate'))}
+            <span class="gsum">${a.n} · ${money(a.total)}${a.due>0.005?` · <b>${esc(t('kpiUnpaid'))} ${money(a.due)}</b>`:''}</span></td></tr>`;
+        }
+      }
+      return head+(()=>{
       const c=calc(i),st=invStatus(i);
       const late=st==='over'&&i.dueDate?` <span class="muted">(+${daysBetween(i.dueDate,today())} d.)</span>`:'';
       return `<tr class="clickable" data-inv="${i.id}">
@@ -1534,6 +1607,7 @@ function invTable(list,compact){
         <td class="num">${money(c.total)}</td>
         ${compact?'':`<td class="num">${c.paid?money(c.paid):'<span class="muted">—</span>'}</td>`}
         <td><span class="pill ${st}">${esc(t(STATUS_LABEL[st]))}</span></td></tr>`;
+      })();
     }).join('')}
   </tbody></table>`;
 }
@@ -1546,11 +1620,15 @@ function bindInvRows(root){
 
 <script>
 /* ===================== invoice list ===================== */
-let invFilter={q:'',status:'all',year:'all'};
+let invFilter={q:'',status:'all',year:'all',month:'all'};
 function renderInvoices(){
   const years=Array.from(new Set(S.invoices.map(i=>(i.date||'').slice(0,4)).filter(Boolean))).sort().reverse();
   let list=S.invoices.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.seq||0)-(a.seq||0));
   if(invFilter.year!=='all')list=list.filter(i=>(i.date||'').slice(0,4)===invFilter.year);
+  /* the month list follows the year filter, so it never offers an empty month */
+  const months=Array.from(new Set(list.map(i=>(i.date||'').slice(0,7)).filter(Boolean))).sort().reverse();
+  if(invFilter.month!=='all'&&!months.includes(invFilter.month))invFilter.month='all';
+  if(invFilter.month!=='all')list=list.filter(i=>(i.date||'').slice(0,7)===invFilter.month);
   if(invFilter.status!=='all')list=list.filter(i=>invStatus(i)===invFilter.status);
   if(invFilter.q){
     const q=normQ(invFilter.q);
@@ -1566,13 +1644,15 @@ function renderInvoices(){
     <div class="btnrow">${FIL.map(([k,l])=>`<button class="btn sm ${invFilter.status===k?'primary':''}" data-fs="${k}">${esc(t(l))}</button>`).join('')}</div>
     <select id="invYear" style="width:auto"><option value="all">${esc(t('allYears'))}</option>
       ${years.map(y=>`<option value="${y}" ${invFilter.year===y?'selected':''}>${y}</option>`).join('')}</select>
+    <select id="invMonth" style="width:auto"><option value="all">${esc(t('allMonths'))}</option>
+      ${months.map(m=>`<option value="${m}" ${invFilter.month===m?'selected':''}>${esc(monthLabel(m))}</option>`).join('')}</select>
     <div class="grow"></div>
     <span class="pill mono">${list.length} · ${money(tot)} ${esc(cur())}</span>
     <button class="btn sm" id="invPeriod">${esc(t('expTitle'))}</button>
     <button class="btn sm" id="invCsv">${esc(t('exportCsv'))}</button>
     <button class="btn sm primary" id="invNew">＋ ${esc(t('newInvoice'))}</button>
   </div>
-  ${list.length?`<div class="body tight"><div class="tblwrap" style="border:0">${invTable(list,false)}</div></div>`
+  ${list.length?`<div class="body tight"><div class="tblwrap" style="border:0">${invTable(list,false,invFilter.month==='all')}</div></div>`
     :`<div class="empty"><div class="big">${esc(t('noInvoices'))}</div>${esc(t('noInvoicesSub'))}</div>`}
   </div>`;
 
@@ -1581,6 +1661,7 @@ function renderInvoices(){
     $('#invQ').setSelectionRange(q.value.length,q.value.length);};
   $$('#p-invoices [data-fs]').forEach(b=>b.onclick=()=>{invFilter.status=b.dataset.fs;renderInvoices();});
   $('#invYear').onchange=e=>{invFilter.year=e.target.value;renderInvoices();};
+  $('#invMonth').onchange=e=>{invFilter.month=e.target.value;renderInvoices();};
   $('#invNew').onclick=newInvoice;
   $('#invPeriod').onclick=periodModal;
   $('#invCsv').onclick=()=>exportCsv(list);
@@ -3445,7 +3526,10 @@ function normaliseImported(raw){
     customerId:null,
     lines:lines.length?lines:[{id:uid(),name:t('impLineFallback'),qty:1,unit:'vnt',price:0,disc:0,vat:0}],
     notes:raw.notes||'',currency:raw.currency||cur(),
-    status:raw.status||'sent',payments:raw.payments||[],
+    status:raw.status||'sent',
+    /* an imported payment carries no id, and the payment list deletes by id */
+    payments:(raw.payments||[]).map(p=>({id:uid(),date:String(p.date||'').slice(0,10)||date,
+      amount:num(p.amount),note:p.note||''})).filter(p=>p.amount),
     issuer:raw.issuer||'',receiver:raw.receiver||'',
     imported:true
   };
@@ -3480,7 +3564,22 @@ function importPlan(list){
   const series=(fresh.find(i=>i.series)||{}).series||'';
   const maxSeq=fresh.reduce((m,i)=>Math.max(m,num(i.seq)||0),0);
   const format=inferFormat((fresh.find(i=>i.no)||{}).no||'',series);
-  return {fresh,dupes,newCust:Array.from(newCust.values()),
+  /* A number we already hold is not a dead end: the file may be a fresher
+     export of the same book, carrying payments the invoice here has not seen.
+     Matching on date+amount means re-importing the same file is a no-op. */
+  const held=new Map();S.invoices.forEach(i=>held.set(normQ(i.no),i));
+  const key=p=>String(p.date||'')+'|'+r2(num(p.amount)).toFixed(2);
+  const updates=[];
+  dupes.forEach(i=>{
+    const have=held.get(normQ(i.no));
+    if(!have)return;
+    const seen=new Set((have.payments||[]).map(key));
+    const add=(i.payments||[]).filter(p=>num(p.amount)&&!seen.has(key(p)));
+    if(add.length)updates.push({id:have.id,no:have.no,add,
+      was:r2(calc(have).due),paid:r2(add.reduce((x,p)=>x+num(p.amount),0))});
+  });
+  const newPaid=r2(updates.reduce((s,u)=>s+u.paid,0));
+  return {fresh,dupes,updates,newPaid,newCust:Array.from(newCust.values()),
           from:dates[0]||'',to:dates[dates.length-1]||'',total,series,maxSeq,format};
 }
 function applyImport(plan,opts){
@@ -3493,6 +3592,13 @@ function applyImport(plan,opts){
              address:b.address||'',email:b.email||'',phone:b.phone||'',contact:'',
              term:null,note:'',src:'import'};
     S.customers.push(c);index.set(custKey(b),c);
+  });
+  if(opts.syncPayments!==false)(plan.updates||[]).forEach(u=>{
+    const inv=S.invoices.find(x=>x.id===u.id);
+    if(!inv)return;
+    inv.payments=(inv.payments||[]).concat(u.add.map(p=>({id:uid(),date:p.date,
+      amount:num(p.amount),note:p.note||''})));
+    if(inv.status==='draft')inv.status='sent';
   });
   plan.fresh.forEach(i=>{
     const c=index.get(custKey(i.buyer));
@@ -3511,7 +3617,7 @@ function applyImport(plan,opts){
 
 function importModal(){
   let plan=null,srcName='';
-  const opts={adoptNumbering:true,markPaid:false,numberFormat:''};
+  const opts={adoptNumbering:true,markPaid:false,numberFormat:'',syncPayments:true};
   const body=()=>`
     <div class="note" style="margin-bottom:12px">${esc(t('impHint'))}</div>
     <div class="drop" id="impDrop">
@@ -3523,19 +3629,24 @@ function importModal(){
   const preview=()=>{
     const box=$('#impPreview');
     if(!plan){box.innerHTML='';$('#impGo').disabled=true;return;}
-    $('#impGo').disabled=!plan.fresh.length;
+    const ups=plan.updates||[];
+    $('#impGo').disabled=!plan.fresh.length&&!ups.length;
     box.innerHTML=`
-      <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:14px">
+      <div class="kpis" style="grid-template-columns:repeat(${ups.length?4:3},minmax(0,1fr));margin-top:14px">
         <div class="kpi ok"><div class="kl">${esc(t('impNew'))}</div><div class="kv">${plan.fresh.length}</div>
           <div class="ks">${esc(plan.from)} → ${esc(plan.to)}</div></div>
         <div class="kpi"><div class="kl">${esc(t('impCustomers'))}</div><div class="kv">${plan.newCust.length}</div>
           <div class="ks">${esc(t('impCustomersSub'))}</div></div>
         <div class="kpi"><div class="kl">${esc(t('colTotal'))}</div><div class="kv">${money(plan.total)}</div>
           <div class="ks">${esc(cur())}</div></div>
+        ${ups.length?`<div class="kpi ok"><div class="kl">${esc(t('impUpdated'))}</div><div class="kv">${ups.length}</div>
+          <div class="ks">${money(plan.newPaid)} ${esc(cur())}</div></div>`:''}
       </div>
-      ${plan.dupes.length?`<div class="note warn" style="margin-top:12px">${esc(t('impDupes'))}: <b>${plan.dupes.length}</b>
-        <span class="muted">${esc(plan.dupes.slice(0,6).map(d=>d.no).join(', '))}${plan.dupes.length>6?'…':''}</span></div>`:''}
+      ${plan.dupes.length?`<div class="note ${ups.length?'':'warn'}" style="margin-top:12px">${esc(t('impDupes'))}: <b>${plan.dupes.length}</b>
+        ${ups.length?`— ${esc(t('impDupesPaid'))} <b>${ups.length}</b>`:`<span class="muted">${esc(plan.dupes.slice(0,6).map(d=>d.no).join(', '))}${plan.dupes.length>6?'…':''}</span>`}</div>`:''}
       <div style="margin-top:14px">
+        ${ups.length?`<label class="inline-check" style="margin-bottom:7px"><input type="checkbox" id="impSync" ${opts.syncPayments?'checked':''}>
+          <span>${esc(t('impSync'))}</span></label>`:''}
         <label class="inline-check"><input type="checkbox" id="impNum" ${opts.adoptNumbering?'checked':''}>
           <span>${esc(t('impAdopt'))}${plan.maxSeq?` — <b class="mono">${esc(formatNo(plan.format||S.settings.format,plan.series||S.settings.series,plan.maxSeq+1))}</b>`:''}</span></label>
         <label class="inline-check" style="margin-top:7px"><input type="checkbox" id="impPaid" ${opts.markPaid?'checked':''}>
@@ -3548,7 +3659,16 @@ function importModal(){
             <td class="mono">${esc(i.date)}</td><td>${esc(i.buyer.name)}</td>
             <td class="num">${money(calc(i).total)}</td></tr>`).join('')}
         </tbody></table></div>
-      ${plan.fresh.length>60?`<div class="muted" style="margin-top:6px">…${plan.fresh.length-60} ${esc(t('impMore'))}</div>`:''}`;
+      ${plan.fresh.length>60?`<div class="muted" style="margin-top:6px">…${plan.fresh.length-60} ${esc(t('impMore'))}</div>`:''}
+      ${ups.length?`<div class="muted" style="margin:14px 0 6px">${esc(t('impUpdatedSub'))}</div>
+      <div class="tblwrap" style="max-height:190px;overflow-y:auto">
+        <table><thead><tr><th>${esc(t('colNo'))}</th><th class="num">${esc(t('edPayments'))}</th>
+          <th class="num">${esc(t('colPaid'))}</th><th class="num">${esc(t('kpiUnpaid'))}</th></tr></thead><tbody>
+          ${ups.slice(0,60).map(u=>`<tr><td class="mono">${esc(u.no)}</td>
+            <td class="num">${u.add.length}</td><td class="num">${money(u.paid)}</td>
+            <td class="num">${money(r2(u.was-u.paid))}</td></tr>`).join('')}
+        </tbody></table></div>`:''}`;
+    const sy=$('#impSync');if(sy)sy.onchange=e=>{opts.syncPayments=e.target.checked;preview();};
     $('#impNum').onchange=e=>{opts.adoptNumbering=e.target.checked;};
     $('#impPaid').onchange=e=>{opts.markPaid=e.target.checked;};
   };
@@ -3577,11 +3697,11 @@ function importModal(){
       drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');
         if(e.dataTransfer.files[0])take(e.dataTransfer.files[0]);};
       $('#impGo').onclick=()=>{
-        if(!plan||!plan.fresh.length)return;
-        const n=plan.fresh.length;
+        if(!plan||(!plan.fresh.length&&!(plan.updates||[]).length))return;
+        const n=plan.fresh.length,u=opts.syncPayments?(plan.updates||[]).length:0;
         applyImport(plan,opts);
         closeModal();render();
-        toast(t('impDone')+' '+n);
+        toast((n?t('impDone')+' '+n:'')+(n&&u?' · ':'')+(u?t('impDonePaid')+' '+u:''));
       };
     });
 }
@@ -4379,7 +4499,7 @@ function boot(){
       if(VIEW==='editor'&&EDIT){if(commitInvoice()){toast(t('saved'));render();}}else{saveNow();toast(t('saved'));}}
   });
   const h=(location.hash||'').replace('#','');
-  go(TABS.some(x=>x.id===h&&h!=='editor'&&h!=='waybill')?h:'dash');
+  go(TABS.some(x=>x.id===h&&h!=='editor'&&h!=='waybill')?h:'dash',true);
   /* If the registry was downloaded before, bring it back silently. */
   REG.loadIfCached().then(ok=>{if(ok&&VIEW==='settings')paintRegPanel();});
   Cloud.load();paintCloud();Cloud.start();

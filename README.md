@@ -65,13 +65,50 @@ or **CSV**.
 Settings → **Importuoti sąskaitas**. It **merges** — nothing is deleted, and
 invoice numbers you already hold are skipped, so re-running the same file is
 safe. It accepts this app's own backup, a generic CSV, and the JSON produced by
-`tools/import_pdf.py`. Buyers become customers (deduplicated by company code,
-then by name), and the preview shows exactly what will land before you confirm.
+`tools/import_pdf.py` or `tools/import_xlsx.py`. Buyers become customers
+(deduplicated by company code, then by name), and the preview shows exactly what
+will land before you confirm.
+
+A number you already hold is not a dead end. If the file carries **payments** the
+invoice here has not seen, they are merged into it — lines untouched — so a fresh
+export of the same book brings the paid/unpaid picture up to date instead of
+being skipped whole. Payments are matched on date + amount, so importing the same
+file twice never double-counts; **"Perkelti mokėjimus į jau turimas sąskaitas"**
+turns it off.
 
 Ticking **"Tęsti numeraciją nuo importuotų"** carries the old run forward: the
 series, the next number *and the number's shape* are inferred from the file, so
 after importing a book ending at `DBSF 0002943` the next invoice you write is
 `DBSF 0002944` rather than restarting in this app's default format.
+
+### The accounting export (XLSX)
+
+`tools/import_xlsx.py` converts the two-sheet workbook the previous app exports
+— `Sąskaitos` and `Mokėjimai` — into that JSON, payments included:
+
+```bash
+python3 tools/import_xlsx.py BOOK.xlsx -o import.json
+```
+
+Standard library only: the workbook is unzipped and its sheet XML read directly,
+no openpyxl. Columns are found by header name rather than position, and invoice
+numbers are built as `SERIJA NUMERIS` (`DBSF 0002851`) — the same shape
+`import_pdf.py` emits, which is what lets the payments land on invoices that came
+in from the PDF.
+
+Two things the workbook forces:
+
+- It has **no line items**, only invoice totals, so each invoice gets a single
+  line priced at `Suma be PVM`. Anything already in the app keeps its own lines.
+- Some totals were back-computed from a round gross (`19 215,00`), so recomputing
+  21% VAT from the stored net lands a cent away from the document that was
+  actually sent — and the matching payment would leave the invoice *part paid*
+  forever. Those get a visible `Apvalinimas` line of ∓0.01 so the total, and
+  therefore the balance, matches the customer's copy. Every one is listed in the
+  run's output.
+
+A second series ending in `IS` (`DBSFIS`) is imported as **išankstinė sąskaita**
+— `--proforma-series ''` turns that off, or name the series explicitly.
 
 ### Invoice books that only exist as PDF
 
@@ -92,6 +129,17 @@ that wrap inside their cell are stitched back together.
 Every page is checked against its own arithmetic (qty × price = line net, line
 nets = stated net, net + VAT = total) and anything that fails is reported and
 left out rather than imported quietly.
+
+## The invoice list
+
+Sorted newest first and **split by month**, each divider carrying that month's
+count, total and — when there is one — the amount still outstanding. The year and
+month pickers narrow the list; picking a single month drops the dividers, since
+there is then only one. The dashboard's compact tables are left ungrouped.
+
+Browser **Back** walks back through the app rather than leaving it: every view
+change pushes a history entry, and a back press with a dialog open closes the
+dialog and stays put. Opening an invoice and pressing Back returns to the list.
 
 ## Invoice appearance
 
@@ -211,7 +259,7 @@ of querying them live from the browser.
 
 ```bash
 python3 serve.py &
-open http://localhost:8741/test.html        # 354 in-browser assertions
+open http://localhost:8741/test.html        # 391 in-browser assertions
 python3 tools/e2e/e2e.py                    # headless Chrome, real registry
 ```
 

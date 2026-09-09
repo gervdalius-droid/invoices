@@ -540,6 +540,100 @@ function tests(W,D){
   W.S.invoices=[];W.S.customers=[];W.S.settings.series='SF';W.S.settings.next=1;
 
   /* ---------------------------------------------------------------- */
+  grp('payment sync (XLSX book re-imported)');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.next=1;W.S.settings.series='SF';
+  /* the book arrives first with no payments — the state after a PDF import */
+  W.applyImport(W.importPlan(W.parseImportDoc(pdfJson,'book.json').invoices),{});
+  eq('book in place', W.S.invoices.length, 2);
+  ok('nothing paid yet', W.S.invoices.every(i=>W.calc(i).paid===0));
+  /* …then the same numbers come back from the accounting export, with payments */
+  const paidJson=JSON.stringify({format:'saskaitos-import',version:1,invoices:[
+    {no:'DBSF 0002851',series:'DBSF',seq:2851,date:'2026-01-05',dueDate:'2026-01-06',
+     buyer:{name:'MB "Leto projektai"',code:'303177592'},
+     lines:[{name:'LMDP skydai',qty:2,unit:'kompl',price:230.5,disc:0,vat:21}],
+     payments:[{date:'2026-01-20',amount:557.81,note:'Mokama pervedimu'}]},
+    {no:'DBSF 0002852',series:'DBSF',seq:2852,date:'2026-01-09',dueDate:'2026-01-16',
+     buyer:{name:'MB "Leto projektai"',code:'303177592'},
+     lines:[{name:'Stalas',qty:1,unit:'vnt',price:500,disc:0,vat:21}],
+     payments:[{date:'2026-02-01',amount:200}]}]});
+  const sPlan=W.importPlan(W.parseImportDoc(paidJson,'book.xlsx').invoices);
+  eq('no new invoices', sPlan.fresh.length, 0);
+  eq('both are duplicates', sPlan.dupes.length, 2);
+  eq('both gain payments', sPlan.updates.length, 2);
+  near('money to be applied', sPlan.newPaid, 757.81);
+  eq('the update names the held invoice', sPlan.updates[0].no, 'DBSF 0002851');
+  W.applyImport(sPlan,{adoptNumbering:false,syncPayments:true});
+  eq('no invoice was added', W.S.invoices.length, 2);
+  eq('settled invoice reads as paid', W.invStatus(W.S.invoices[0]), 'paid');
+  eq('short payment reads as partial', W.invStatus(W.S.invoices[1]), 'part');
+  near('balance left on the partial', W.calc(W.S.invoices[1]).due, 405);
+  ok('merged payments carry an id',
+     W.S.invoices.every(i=>(i.payments||[]).every(p=>!!p.id&&p.amount>0)));
+  /* the same export dropped in twice must not double-count */
+  const sPlan2=W.importPlan(W.parseImportDoc(paidJson,'book.xlsx').invoices);
+  eq('nothing left to sync', sPlan2.updates.length, 0);
+  W.applyImport(sPlan2,{syncPayments:true});
+  near('paid total unchanged', W.calc(W.S.invoices[0]).paid, 557.81);
+  /* a later, larger payment on the same invoice is a different payment */
+  const morePlan=W.importPlan(W.parseImportDoc(paidJson.replace('"amount":200','"amount":405'),'x').invoices);
+  eq('only the changed one is picked up', morePlan.updates.length, 1);
+  W.applyImport(morePlan,{syncPayments:true});
+  eq('and it settles the invoice', W.invStatus(W.S.invoices[1]), 'paid');
+  /* opting out leaves everything alone */
+  W.S.invoices.forEach(i=>{i.payments=[];});
+  const offPlan=W.importPlan(W.parseImportDoc(paidJson,'x').invoices);
+  W.applyImport(offPlan,{syncPayments:false});
+  ok('payments not touched when the box is off',
+     W.S.invoices.every(i=>(i.payments||[]).length===0));
+  W.S.invoices=[];W.S.customers=[];W.S.settings.series='SF';W.S.settings.next=1;
+
+  /* ---------------------------------------------------------------- */
+  grp('month grouping');
+  eq('LT month label', W.monthLabel('2026-01'), '2026 m. sausis');
+  eq('LT month label, december', W.monthLabel('2025-12'), '2025 m. gruodis');
+  eq('no month, no label', W.monthLabel(''), '');
+  const mList=[
+    {id:'m1',no:'A-3',date:'2026-03-04',buyer:{name:'X'},lines:[{qty:1,price:100,vat:21}],payments:[]},
+    {id:'m2',no:'A-2',date:'2026-02-20',buyer:{name:'X'},lines:[{qty:1,price:100,vat:21}],payments:[]},
+    {id:'m3',no:'A-1',date:'2026-02-01',buyer:{name:'X'},lines:[{qty:1,price:100,vat:21}],payments:[]}];
+  const grouped=W.invTable(mList,false,true);
+  eq('one divider per month', (grouped.match(/class="grp"/g)||[]).length, 2);
+  ok('the divider is named', grouped.indexOf('2026 m. vasaris')>=0);
+  ok('the divider counts its month', grouped.indexOf('>2 · ')>=0||grouped.indexOf('2 · ')>=0);
+  eq('every invoice still has a row', (grouped.match(/data-inv=/g)||[]).length, 3);
+  eq('no dividers when grouping is off', (W.invTable(mList,false,false).match(/class="grp"/g)||[]).length, 0);
+  eq('the dashboard table is untouched', (W.invTable(mList,true).match(/class="grp"/g)||[]).length, 0);
+
+  /* ---------------------------------------------------------------- */
+  grp('back button / history');
+  const hashWas=W.location.hash;
+  W.EDIT=null;W.WB=null;
+  W.location.hash='#customers';
+  eq('a real tab resolves', W.viewFromHash(), 'customers');
+  W.location.hash='#editor';
+  eq('the editor with nothing open falls back to the list', W.viewFromHash(), 'invoices');
+  W.location.hash='#waybill';
+  eq('so does the waybill editor', W.viewFromHash(), 'waybills');
+  W.location.hash='#nonsense';
+  eq('an unknown view falls back to the dashboard', W.viewFromHash(), 'dash');
+  W.location.hash='';
+  eq('no hash is the dashboard', W.viewFromHash(), 'dash');
+  W.go('items');
+  eq('go writes the hash', W.location.hash, '#items');
+  eq('and switches the view', W.VIEW, 'items');
+  /* what the browser Back button actually does: hash moves, popstate fires */
+  W.location.hash='#customers';
+  W.dispatchEvent(new W.PopStateEvent('popstate'));
+  eq('a back step re-renders the earlier view', W.VIEW, 'customers');
+  /* with a dialog open the press closes the dialog and stays put */
+  W.openModal('x','<p>x</p>');
+  ok('modal is open', W.document.getElementById('scrim').classList.contains('on'));
+  W.dispatchEvent(new W.PopStateEvent('popstate'));
+  ok('the press closed the dialog', !W.document.getElementById('scrim').classList.contains('on'));
+  eq('and left the view where it was', W.VIEW, 'customers');
+  W.go('dash');W.location.hash=hashWas;
+
+  /* ---------------------------------------------------------------- */
   grp('branding');
   eq('shade darkens', W.shade('#ffffff',-100), '#000000');
   eq('shade lightens', W.shade('#000000',100), '#ffffff');
