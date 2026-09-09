@@ -4042,6 +4042,126 @@ async function makeZip(files){
   return new Blob([...parts,...central,new Uint8Array(end.buffer)],{type:'application/zip'});
 }
 
+/* =========================================================================
+   ZIP reader — the other direction, so an .xlsx (which is a zip of XML) can be
+   dropped straight into the import dialog. Central directory only, no zip64:
+   an accounting export is a few tens of kilobytes.
+   ========================================================================= */
+async function inflateRaw(bytes){
+  if(typeof DecompressionStream!=='function')return null;
+  try{
+    const ds=new DecompressionStream('deflate-raw');
+    const ab=await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+    return new Uint8Array(ab);
+  }catch(e){return null;}
+}
+/* ArrayBuffer -> Map(name -> {method, raw}) */
+function readZip(buf){
+  const b=new Uint8Array(buf);
+  if(b.length<22)throw new Error(t('impBadZip'));
+  const dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
+  let eo=-1;
+  /* the end record sits last, unless a trailing comment pushes it up */
+  for(let i=b.length-22;i>=0&&i>b.length-22-65558;i--)
+    if(dv.getUint32(i,true)===0x06054b50){eo=i;break;}
+  if(eo<0)throw new Error(t('impBadZip'));
+  const n=dv.getUint16(eo+10,true),dec=new TextDecoder();
+  let p=dv.getUint32(eo+16,true);
+  const out=new Map();
+  for(let k=0;k<n&&p+46<=b.length;k++){
+    if(dv.getUint32(p,true)!==0x02014b50)break;
+    const method=dv.getUint16(p+10,true),csize=dv.getUint32(p+20,true);
+    const nameLen=dv.getUint16(p+28,true),extraLen=dv.getUint16(p+30,true),
+          cmtLen=dv.getUint16(p+32,true),lho=dv.getUint32(p+42,true);
+    const name=dec.decode(b.subarray(p+46,p+46+nameLen));
+    /* the local header repeats the name and has its own extra field, so the
+       data offset cannot be taken from the central entry alone */
+    const lNameLen=dv.getUint16(lho+26,true),lExtraLen=dv.getUint16(lho+28,true);
+    const start=lho+30+lNameLen+lExtraLen;
+    out.set(name,{method,raw:b.subarray(start,start+csize)});
+    p+=46+nameLen+extraLen+cmtLen;
+  }
+  return out;
+}
+async function zipText(entries,name){
+  const e=entries.get(name);
+  if(!e)return '';
+  if(e.method===0)return new TextDecoder().decode(e.raw);
+  const bytes=await inflateRaw(e.raw);
+  if(!bytes)throw new Error(t('impNoInflate'));
+  return new TextDecoder().decode(bytes);
+}
+
+/* =========================================================================
+   XLSX -> plain rows. Only what a spreadsheet of invoices needs: shared
+   strings, inline strings, numbers. Formatting is ignored; a date that was
+   stored as a serial is recognised by the column it lands in, not by its style.
+   ========================================================================= */
+const XL_MAIN='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const XL_REL='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+function colOfRef(ref){
+  let n=0;
+  for(let i=0;i<ref.length;i++){
+    const c=ref.charCodeAt(i);
+    if(c>=48&&c<=57)break;
+    n=n*26+((c&~32)-64);
+  }
+  return n-1;
+}
+async function readXlsx(buf){
+  const z=readZip(buf),px=new DOMParser();
+  const xml=str=>{
+    const d=px.parseFromString(str,'application/xml');
+    if(d.getElementsByTagName('parsererror').length)throw new Error(t('impNotXlsx'));
+    return d;
+  };
+  const wbXml=await zipText(z,'xl/workbook.xml');
+  if(!wbXml)throw new Error(t('impNotXlsx'));
+  const rels={};
+  const relXml=await zipText(z,'xl/_rels/workbook.xml.rels');
+  if(relXml)Array.from(xml(relXml).getElementsByTagName('Relationship'))
+    .forEach(r=>{rels[r.getAttribute('Id')]=r.getAttribute('Target');});
+  const ssXml=await zipText(z,'xl/sharedStrings.xml');
+  const shared=ssXml?Array.from(xml(ssXml).getElementsByTagName('si')).map(si=>
+    Array.from(si.getElementsByTagName('t')).map(x=>x.textContent||'').join('')):[];
+  const out=[];
+  const wb=xml(wbXml);
+  const sheets=Array.from(wb.getElementsByTagNameNS(XL_MAIN,'sheet'))
+    .concat(wb.getElementsByTagNameNS(XL_MAIN,'sheet').length?[]:Array.from(wb.getElementsByTagName('sheet')));
+  for(let i=0;i<sheets.length;i++){
+    const sh=sheets[i];
+    const id=sh.getAttributeNS(XL_REL,'id')||sh.getAttribute('r:id')||'';
+    let target=rels[id]||('worksheets/sheet'+(i+1)+'.xml');
+    target=target.replace(/^\//,'');
+    if(target.indexOf('xl/')!==0)target='xl/'+target;
+    const sx=await zipText(z,target);
+    if(!sx)continue;
+    const rows=Array.from(xml(sx).getElementsByTagName('row')).map(row=>{
+      const cells=[];
+      Array.from(row.getElementsByTagName('c')).forEach(c=>{
+        const at=colOfRef(c.getAttribute('r')||'A1');
+        while(cells.length<=at)cells.push('');
+        const ty=c.getAttribute('t');
+        let v='';
+        if(ty==='s'){
+          const n=c.getElementsByTagName('v')[0];
+          v=n?(shared[+n.textContent]||''):'';
+        }else if(ty==='inlineStr'){
+          v=Array.from(c.getElementsByTagName('t')).map(x=>x.textContent||'').join('');
+        }else{
+          const n=c.getElementsByTagName('v')[0];
+          v=n?(n.textContent||''):'';
+        }
+        cells[at]=String(v).trim();
+      });
+      return cells;
+    }).filter(r=>r.some(c=>String(c).trim()));
+    out.push({name:sh.getAttribute('name')||('Sheet'+(i+1)),rows});
+  }
+  if(!out.length)throw new Error(t('impNotXlsx'));
+  return out;
+}
+
 /* Everything the app knows, in one archive. */
 async function exportEverything(){
   const stamp=today();
@@ -4492,7 +4612,9 @@ function boot(){
   $('#fileIn').onchange=e=>{const f=e.target.files[0];if(f)importBackup(f);e.target.value='';};
   $('#cloudChip').onclick=cloudChipClick;
   $('#modalX').onclick=closeModal;
-  $('#scrim').onclick=e=>{if(e.target===$('#scrim'))closeModal();};
+  /* The backdrop deliberately does not close the dialog: an invoice line or a
+     buyer being edited is work in progress, and a stray click beside it used to
+     discard the lot. The header ✕ and the footer buttons are the way out. */
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&$('#scrim').classList.contains('on'))closeModal();
     if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();
