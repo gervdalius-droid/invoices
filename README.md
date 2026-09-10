@@ -28,6 +28,8 @@ harmlessly and is caught by `onerror`).
 | **Sąskaita** | the editor — buyer, lines, VAT, totals, payments, PDF, e-invoice XML |
 | **Važtaraščiai** | consignment notes, filterable by delivered / not delivered |
 | **Važtaraštis** | the waybill editor — three parties, route, vehicle, driver, cargo |
+| **Žiniaraščiai** | darbo laiko apskaitos žiniaraščiai, one per month |
+| **Žiniaraštis** | the timesheet grid — employees × days, hours and absence codes, filled by hand |
 | **Pirkėjai** | customers, manual or straight from the company registry |
 | **Prekės ir paslaugos** | catalogue of what you sell, dropped into an invoice with one click |
 | **Nustatymai** | seller details, logo, bank accounts, numbering, defaults, import/export, backup |
@@ -219,6 +221,40 @@ git-ignored on purpose: the anon key reads nothing on its own (RLS), but there i
 no reason to advertise the account in a public repo — copy the file onto each
 device, or add it to a Pages deploy if you want the hosted app to auto-connect.
 
+## Darbo laiko apskaitos žiniaraštis
+
+A month per sheet: employees down the side, the days of the month across the
+top, filled in by hand. **Žiniaraščiai** lists them, **Žiniaraštis** is the grid.
+
+A cell holds what the paper form holds — hours (`8`), a code (`A`), or both
+(`DP 8`, `8 VD`) — and is stored as the string that was typed, parsed on the fly.
+A code this app has never heard of is kept and counted under its own name rather
+than dropped, so the eighteen listed codes are a convenience, not a limit.
+
+The grid is built for typing: arrow keys and Enter step between cells the way a
+spreadsheet does, the name column is frozen on the left and the two totals on the
+right, and only the totals repaint as you type — the inputs are never re-rendered
+underneath you. **Užpildyti darbo dienas** fills every working day at each
+employee's own daily hours and touches nothing already written; the ⋯ menu on a
+row can overwrite it, clear it, or drop the employee from the sheet.
+
+Weekends and public holidays are shaded and left out of the fill. The holidays
+are computed, not tabulated — four of them move with Easter (Meeus/Jones/Butcher),
+and Mother's and Father's day are the first Sundays of May and June. **A working
+day before a holiday is an hour shorter** (DK 112 str. 6 d.), which is why
+December 2026 is 21 days but 166 hours rather than 168.
+
+The month norm is shown against what has actually been booked, and the difference
+is per employee: someone on four hours a day is measured against their own norm,
+not the full-time one. Printing gives A4 landscape — 31 day columns never fit
+portrait — with the totals, a summary of the codes used, the legend and signature
+lines. There is a CSV too.
+
+Employees are their own small catalogue (name, position, staff number, hours a
+day, whether they still work here), kept in `S.employees` and edited from
+**Tvarkyti darbuotojus**. A new sheet carries last month's line-up forward, or
+falls back to everyone marked as working.
+
 ## Važtaraštis (consignment note)
 
 The shipping document that travels with the goods, carrying what the Kelių
@@ -278,7 +314,7 @@ of querying them live from the browser.
 
 ```bash
 python3 serve.py &
-open http://localhost:8741/test.html        # 436 in-browser assertions
+open http://localhost:8741/test.html        # 500 in-browser assertions
 python3 tools/e2e/e2e.py                    # headless Chrome, real registry
 ```
 

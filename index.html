@@ -126,6 +126,74 @@
   td input[type=number]{min-width:64px}
   tfoot td{font-weight:650;background:#eef1f5;border-top:2px solid var(--line2)}
   .empty{padding:34px 18px;text-align:center;color:var(--ink2)}
+
+  /* ---------- darbo laiko žiniaraštis ---------- */
+  .kpi .kv.up{color:var(--good)}
+  .kpi .kv.down{color:var(--bad)}
+  .tsgrid-wrap{overflow:auto;max-height:72vh;border:1px solid var(--line);border-radius:9px;background:var(--paper)}
+  /* fixed layout + a colgroup: the sticky left offsets below are hard numbers,
+     and an auto-sized name column would slide the day columns underneath them */
+  table.tsg{border-collapse:separate;border-spacing:0;table-layout:fixed;
+    width:max-content;min-width:100%;font-size:12px}
+  .tsg col.nr{width:30px}.tsg col.nm{width:170px}.tsg col.ps{width:120px}
+  .tsg col.dy{width:34px}.tsg col.tt{width:58px}.tsg col.mn{width:38px}
+  table.tsg th,table.tsg td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+    padding:0;white-space:nowrap;background:var(--paper)}
+  table.tsg thead th{position:sticky;top:0;z-index:3;background:#eef1f5;padding:3px 4px;
+    font-size:10px;font-weight:650;text-align:center;color:var(--ink2)}
+  table.tsg thead th i{display:block;font-style:normal;font-size:8.5px;opacity:.7}
+  table.tsg .stick{position:sticky;z-index:2}
+  table.tsg thead .stick{z-index:4}
+  .tsg .c-nr{left:0;width:30px;text-align:center;color:var(--ink2);font-size:11px}
+  .tsg .c-name{left:30px;padding:5px 8px;font-weight:600}
+  .tsg .c-pos{left:200px;padding:5px 8px;color:var(--ink2);font-size:11px}
+  /* the box, not the text, decides the column width */
+  .tsg .cw{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tsg .c-name .cw{width:154px}
+  .tsg .c-pos .cw{width:104px}
+  .tsg td.d,.tsg th.d{width:34px;min-width:34px;text-align:center}
+  .tsg td.d input{width:100%;min-width:0;border:0;background:transparent;text-align:center;
+    padding:6px 1px;font-size:11.5px;font-family:var(--mono);border-radius:0;color:var(--ink)}
+  .tsg td.d input:focus{outline:2px solid var(--acc);outline-offset:-2px;background:#fff}
+  .tsg td.wknd,.tsg th.wknd,.tsg tfoot td.wknd{background:#f3f5f9}
+  .tsg td.hol,.tsg th.hol,.tsg tfoot td.hol{background:#fdf0ee}
+  .tsg th.hol{color:var(--bad)}
+  /* the day grid scrolls between a frozen name on the left and the two totals
+     on the right — those are the numbers being checked while typing */
+  .tsg .tot{text-align:right;padding:5px 9px;font-family:var(--mono);
+    font-variant-numeric:tabular-nums;background:#fafbfd;position:sticky;z-index:2}
+  .tsg .tot.t-days{right:96px;border-left:1px solid var(--line2)}
+  .tsg .tot.t-hours{right:38px}
+  .tsg .tot.t-menu{right:0;padding:2px 4px;text-align:center;background:var(--paper)}
+  .tsg thead .tot{z-index:4}
+  .tsg tfoot .tot{z-index:3}
+  .tsg tfoot td{position:sticky;bottom:0;z-index:2;background:#eef1f5;font-weight:650;
+    font-family:var(--mono);font-size:11px;text-align:center;padding:5px 2px}
+  .tsg tfoot td.stick{z-index:3}
+  .tslegend{columns:2;column-gap:18px;font-size:11.5px;color:var(--ink2);line-height:1.75}
+  .tslegend div{break-inside:avoid}
+  .tslegend b{color:var(--ink);margin-right:5px}
+  /* On a phone the frozen columns would eat the whole width, so only the name
+     and the hours total stay put — the rest scrolls with the days.
+     The position column is collapsed to zero width rather than display:none:
+     removing cells from a fixed-layout row shifts every later cell into the
+     wrong column. */
+  @media(max-width:640px){
+    .tsg col.ps{width:1px}
+    .tsg .c-pos{padding:0;border-right:0}
+    .tsg .c-pos .cw{width:0}
+    .tsg col.nr{width:22px}
+    .tsg .c-nr{padding:0;font-size:10px}
+    .tsg col.nm{width:118px}
+    .tsg .c-name{left:22px;padding:5px 6px}
+    .tsg .c-name .cw{width:106px}
+    .tsg col.tt{width:46px}
+    .tsg col.mn{width:34px}
+    .tsg .tot{padding:5px 5px}
+    .tsg .tot.t-days,.tsg .tot.t-menu{position:static}
+    .tsg .tot.t-hours{right:0}
+    .tslegend{columns:1}
+  }
   .empty .big{font-size:15px;color:var(--ink);font-weight:600;margin-bottom:5px}
 
   /* ---------- chips / pills ---------- */
@@ -301,6 +369,8 @@
   <section class="panel" id="p-editor"></section>
   <section class="panel" id="p-waybills"></section>
   <section class="panel" id="p-waybill"></section>
+  <section class="panel" id="p-sheets"></section>
+  <section class="panel" id="p-sheet"></section>
   <section class="panel" id="p-customers"></section>
   <section class="panel" id="p-items"></section>
   <section class="panel" id="p-settings"></section>
@@ -480,6 +550,41 @@ const I18N={
 
   /* važtaraštis */
   tabWaybills:"Važtaraščiai",tabWaybill:"Važtaraštis",
+  tabSheets:"Žiniaraščiai",tabSheet:"Žiniaraštis",
+  /* ---- darbo laiko apskaitos žiniaraštis ---- */
+  tsTitle:"Darbo laiko apskaitos žiniaraštis",
+  tsCreate:"Sukurti",tsNew:"Naujas žiniaraštis",tsNone:"Žiniaraščių dar nėra",
+  tsNoneSub:"Sukurkite mėnesio žiniaraštį ir pildykite dienas ranka.",
+  tsPickMonth:"Mėnuo",tsDept:"Padalinys",tsNo:"Žiniaraščio Nr.",
+  tsSearch:"Ieškoti pagal mėnesį ar padalinį…",
+  colMonth:"Mėnuo",colEmployees:"Darbuotojai",colWorked:"Dirbta val.",
+  tsEmployees:"Darbuotojai",tsEmpTitle:"Darbuotojų sąrašas",
+  tsEmpName:"Vardas, pavardė",tsEmpPos:"Pareigos",tsEmpTab:"Tab. Nr.",
+  tsEmpHours:"Val./d.",tsEmpAdd:"＋ Pridėti darbuotoją",tsEmpNone:"Darbuotojų sąrašas tuščias",
+  tsEmpActive:"Dirba",tsEmpManage:"Tvarkyti darbuotojus",
+  tsAddRow:"＋ Įtraukti darbuotoją",tsAddAll:"Įtraukti visus",
+  tsFillWork:"Užpildyti darbo dienas",tsFillHint:"Užpildoma tik ten, kur tuščia",
+  tsFillRow:"Užpildyti eilutę",tsClearRow:"Išvalyti eilutę",tsRemoveRow:"Išimti iš žiniaraščio",
+  tsNorm:"Mėnesio norma",tsWorkDays:"Darbo dienos",tsNormHours:"Normos val.",
+  tsWorkedDays:"Dirbta d.",tsWorkedHours:"Dirbta val.",tsDiff:"Skirtumas",
+  tsLegend:"Žymėjimai",tsLegendHint:"Langelyje rašykite valandas (8) arba žymėjimą (A), arba abu: DP 8",
+  tsTotalRow:"Iš viso",tsMadeBy:"Sudarė",tsApproved:"Tvirtinu",tsPositionLbl:"Pareigos",
+  tsPrint:"Spausdinti / PDF",tsCsv:"Eksportuoti CSV",tsBack:"← Žiniaraščių sąrašas",
+  tsDelete:"Ištrinti žiniaraštį",tsExists:"Šio mėnesio žiniaraštis jau yra",
+  tsCopyPrev:"Perkelti darbuotojus iš praėjusio mėnesio",
+  tsNoRows:"Žiniaraštyje dar nėra darbuotojų",
+  tsNoRowsSub:"Įtraukite darbuotojus ir pildykite dienas.",
+  tsHoliday:"Šventė",tsWeekend:"Poilsio diena",tsShort:"Trumpinama 1 val.",
+  tsSummary:"Suvestinė",tsCode:"Žym.",tsCodeHours:"Val.",tsCodeDays:"D.",
+  tsOtherCode:"Kita",tsFilled:"Užpildyta",
+  tsFD:"Faktiškai dirbtas laikas",tsVD:"Viršvalandinis darbas",
+  tsDN:"Darbas nakties metu",tsDP:"Darbas poilsio ir švenčių dienomis",
+  tsK:"Komandiruotė",tsKV:"Kvalifikacijos kėlimas",
+  tsA:"Kasmetinės atostogos",tsMA:"Mokymosi atostogos",tsNA:"Nemokamos atostogos",
+  tsG:"Nėštumo ir gimdymo atostogos",tsPV:"Atostogos vaikui prižiūrėti",
+  tsL:"Liga (nedarbingumas)",tsV:"Valstybinių pareigų vykdymas",
+  tsP:"Prastova",tsPB:"Pravaikšta",tsNN:"Neatvykimas nenurodytomis priežastimis",
+  tsND:"Nemokamas laisvas laikas",tsPK:"Papildomos poilsio dienos",
   wbNew:"Naujas važtaraštis",wbTitle:"KROVINIO VAŽTARAŠTIS",
   wbNo:"Važtaraščio Nr.",wbDate:"Surašymo data",wbPlace:"Surašymo vieta",
   wbConsignor:"Siuntėjas",wbConsignee:"Gavėjas",wbCarrier:"Vežėjas",
@@ -712,6 +817,41 @@ const I18N={
 
   /* consignment note */
   tabWaybills:"Waybills",tabWaybill:"Waybill",
+  tabSheets:"Timesheets",tabSheet:"Timesheet",
+  /* ---- working time record sheet ---- */
+  tsTitle:"Working time record sheet",
+  tsCreate:"Create",tsNew:"New timesheet",tsNone:"No timesheets yet",
+  tsNoneSub:"Create a sheet for the month and fill the days in by hand.",
+  tsPickMonth:"Month",tsDept:"Department",tsNo:"Sheet no.",
+  tsSearch:"Search by month or department…",
+  colMonth:"Month",colEmployees:"Employees",colWorked:"Hours",
+  tsEmployees:"Employees",tsEmpTitle:"Employee list",
+  tsEmpName:"Name",tsEmpPos:"Position",tsEmpTab:"Staff no.",
+  tsEmpHours:"Hrs/day",tsEmpAdd:"＋ Add employee",tsEmpNone:"The employee list is empty",
+  tsEmpActive:"Working",tsEmpManage:"Manage employees",
+  tsAddRow:"＋ Add employee",tsAddAll:"Add everyone",
+  tsFillWork:"Fill the working days",tsFillHint:"Only empty cells are filled",
+  tsFillRow:"Fill the row",tsClearRow:"Clear the row",tsRemoveRow:"Remove from the sheet",
+  tsNorm:"Month norm",tsWorkDays:"Working days",tsNormHours:"Norm hours",
+  tsWorkedDays:"Days",tsWorkedHours:"Hours",tsDiff:"Difference",
+  tsLegend:"Codes",tsLegendHint:"Type hours (8) or a code (A) in a cell — or both: DP 8",
+  tsTotalRow:"Total",tsMadeBy:"Prepared by",tsApproved:"Approved by",tsPositionLbl:"Position",
+  tsPrint:"Print / PDF",tsCsv:"Export CSV",tsBack:"← Timesheet list",
+  tsDelete:"Delete the sheet",tsExists:"A sheet for that month already exists",
+  tsCopyPrev:"Carry the employees over from last month",
+  tsNoRows:"No employees on this sheet yet",
+  tsNoRowsSub:"Add employees, then fill in their days.",
+  tsHoliday:"Public holiday",tsWeekend:"Rest day",tsShort:"One hour shorter",
+  tsSummary:"Summary",tsCode:"Code",tsCodeHours:"Hrs",tsCodeDays:"Days",
+  tsOtherCode:"Other",tsFilled:"Filled",
+  tsFD:"Time actually worked",tsVD:"Overtime",
+  tsDN:"Night work",tsDP:"Work on rest days and public holidays",
+  tsK:"Business trip",tsKV:"Training",
+  tsA:"Annual leave",tsMA:"Study leave",tsNA:"Unpaid leave",
+  tsG:"Maternity leave",tsPV:"Parental leave",
+  tsL:"Sick leave",tsV:"Public duties",
+  tsP:"Downtime",tsPB:"Unauthorised absence",tsNN:"Absence, reason not given",
+  tsND:"Unpaid time off",tsPK:"Additional rest days",
   wbNew:"New waybill",wbTitle:"CONSIGNMENT NOTE",
   wbNo:"Waybill No.",wbDate:"Date of issue",wbPlace:"Place of issue",
   wbConsignor:"Consignor",wbConsignee:"Consignee",wbCarrier:"Carrier",
@@ -809,7 +949,7 @@ const t=k=>{const d=I18N[LANG];if(d&&d[k]!==undefined)return d[k];if(I18N.en[k]!
 const KEY='inv_state_v1', LANG_KEY='fab_lang'; /* same lang key the sibling apps use */
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
-const STATE_V=4;
+const STATE_V=5;
 /* Everything about how the printed invoice LOOKS lives here, so the document
    can be restyled without touching printInvoice's structure. */
 function blankBrand(){
@@ -836,12 +976,16 @@ function blankState(){
               showDisc:false,
               /* važtaraštis gets its own series so the two never collide */
               wbSeries:"VŽ",wbNext:1,wbFormat:"{S}-{YYYY}-{NNNN}",
-              wbPlace:"",wbNote:""},
+              wbPlace:"",wbNote:"",
+              /* žiniaraštis: the working day this employer counts on */
+              tsHours:8,tsDept:"",tsMadeBy:"",tsMadeByPos:""},
     brand:blankBrand(),
     customers:[],items:[],invoices:[],
     waybills:[],
     fleet:[],     /* {id, plate, make, trailer} */
-    drivers:[]    /* {id, name, doc} */
+    drivers:[],   /* {id, name, doc} */
+    employees:[], /* {id, name, position, tabNo, hours, active} */
+    timesheets:[] /* darbo laiko apskaitos žiniaraščiai, one per month */
   };
 }
 /* v1 kept showWords / showSign under settings; v2 moved them into brand.
@@ -872,11 +1016,18 @@ function migrate(p){
     });
     p.v=4;
   }
+  if(p.v<5){
+    /* darbo laiko apskaitos žiniaraštis */
+    p.employees=p.employees||[];
+    p.timesheets=p.timesheets||[];
+    p.v=5;
+  }
   return p;
 }
 let S=blankState();
 let VIEW='dash';            /* active tab */
 let EDIT=null;              /* invoice object currently open in the editor */
+let TS=null;                /* žiniaraštis currently open in its editor */
 let saveTimer=null;
 
 function load(){
@@ -900,6 +1051,7 @@ function adopt(p){
   if(!Array.isArray(S.seller.banks)||!S.seller.banks.length)S.seller.banks=[{bank:"",iban:"",swift:""}];
   S.customers=p.customers||[];S.items=p.items||[];S.invoices=p.invoices||[];
   S.waybills=p.waybills||[];S.fleet=p.fleet||[];S.drivers=p.drivers||[];
+  S.employees=p.employees||[];S.timesheets=p.timesheets||[];
   S.v=STATE_V;
   return S;
 }
@@ -1410,6 +1562,8 @@ const TABS=[
   {id:'editor',   ic:'✎', key:'tabEditor', hidden:()=>!EDIT},
   {id:'waybills', ic:'⛟', key:'tabWaybills'},
   {id:'waybill',  ic:'✎', key:'tabWaybill', hidden:()=>!WB},
+  {id:'sheets',   ic:'▩', key:'tabSheets'},
+  {id:'sheet',    ic:'✎', key:'tabSheet', hidden:()=>!TS},
   {id:'customers',ic:'☺', key:'tabCustomers'},
   {id:'items',    ic:'◈', key:'tabItems'},
   {id:'settings', ic:'⚙', key:'tabSettings'}
@@ -1447,7 +1601,8 @@ function viewFromHash(){
   const tab=TABS.find(x=>x.id===h);
   if(!tab)return 'dash';
   /* the editor tabs only exist while something is open in them */
-  if(tab.hidden&&tab.hidden())return h==='editor'?'invoices':h==='waybill'?'waybills':'dash';
+  if(tab.hidden&&tab.hidden())
+    return h==='editor'?'invoices':h==='waybill'?'waybills':h==='sheet'?'sheets':'dash';
   return h;
 }
 window.addEventListener('popstate',()=>{
@@ -1466,6 +1621,7 @@ window.addEventListener('popstate',()=>{
 function render(){
   ({dash:renderDash,invoices:renderInvoices,editor:renderEditor,
     waybills:renderWaybills,waybill:renderWaybill,
+    sheets:renderSheets,sheet:renderSheet,
     customers:renderCustomers,items:renderItems,settings:renderSettings}[VIEW]||renderDash)();
   renderTabs();
 }
@@ -4145,6 +4301,678 @@ function exportUbl(inv){download(`${slug(inv.no)}.xml`,ublXml(inv),'application/
 
 <script>
 /* =========================================================================
+   Darbo laiko apskaitos žiniaraštis — one sheet per month, employees down the
+   side, days across the top, filled in by hand.
+
+   A cell holds what the paper form holds: hours ("8"), a code ("A"), or both
+   ("DP 8"). It is stored as the typed string and parsed on the fly, so a code
+   this app has never heard of is kept and counted rather than dropped.
+   ========================================================================= */
+const TS_CODES=[
+  {c:'FD',k:'tsFD',work:true},{c:'VD',k:'tsVD',work:true},
+  {c:'DN',k:'tsDN',work:true},{c:'DP',k:'tsDP',work:true},
+  {c:'K', k:'tsK', work:true},{c:'KV',k:'tsKV'},
+  {c:'A', k:'tsA'},{c:'MA',k:'tsMA'},{c:'NA',k:'tsNA'},
+  {c:'G', k:'tsG'},{c:'PV',k:'tsPV'},{c:'L', k:'tsL'},
+  {c:'V', k:'tsV'},{c:'P', k:'tsP'},{c:'PB',k:'tsPB'},
+  {c:'NN',k:'tsNN'},{c:'ND',k:'tsND'},{c:'PK',k:'tsPK'}
+];
+const TS_BY_CODE=(()=>{const m={};TS_CODES.forEach(x=>m[x.c]=x);return m;})();
+const TS_DOW=['tsMon','tsTue','tsWed','tsThu','tsFri','tsSat','tsSun'];
+const TS_DOW_LT=['Pr','An','Tr','Kt','Pn','Št','Sk'];
+const TS_DOW_EN=['Mo','Tu','We','Th','Fr','Sa','Su'];
+
+/* Easter drives four Lithuanian public holidays, so it has to be computed
+   rather than tabulated — Meeus/Jones/Butcher, Gregorian. */
+function easterSunday(y){
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,
+        f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+        h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+        l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+        mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;
+  return new Date(Date.UTC(y,mo-1,da));
+}
+const isoOf=d=>d.toISOString().slice(0,10);
+/* {ISO date: name} — the statutory list, DK 123 str. */
+function ltHolidays(y){
+  const H={},put=(iso,lt,en)=>{H[iso]=LANG==='lt'?lt:en;};
+  const pad=n=>String(n).padStart(2,'0');
+  const ymd=(m,d)=>y+'-'+pad(m)+'-'+pad(d);
+  const firstSunday=m=>{const d=new Date(Date.UTC(y,m-1,1));
+    d.setUTCDate(1+((7-d.getUTCDay())%7));return isoOf(d);};
+  const easter=easterSunday(y);
+  put(ymd(1,1),'Naujieji metai','New Year');
+  put(ymd(2,16),'Valstybės atkūrimo diena','Restoration of the State');
+  put(ymd(3,11),'Nepriklausomybės atkūrimo diena','Restoration of Independence');
+  put(isoOf(easter),'Velykos','Easter Sunday');
+  put(isoOf(new Date(easter.getTime()+864e5)),'Antroji Velykų diena','Easter Monday');
+  put(ymd(5,1),'Darbo diena','Labour Day');
+  put(firstSunday(5),'Motinos diena','Mother’s Day');
+  put(firstSunday(6),'Tėvo diena','Father’s Day');
+  put(ymd(6,24),'Joninės','St John’s Day');
+  put(ymd(7,6),'Valstybės diena','Statehood Day');
+  put(ymd(8,15),'Žolinė','Assumption Day');
+  put(ymd(11,1),'Visų šventųjų diena','All Saints’ Day');
+  put(ymd(11,2),'Vėlinės','All Souls’ Day');
+  put(ymd(12,24),'Kūčios','Christmas Eve');
+  put(ymd(12,25),'Šv. Kalėdos','Christmas Day');
+  put(ymd(12,26),'Antroji Kalėdų diena','Boxing Day');
+  return H;
+}
+const tsMonthLen=ym=>new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5,7),0)).getUTCDate();
+/* One entry per day of the month: weekday, weekend, holiday, and whether the
+   day before a holiday is shortened by an hour (DK 112 str. 6 d.). */
+function tsDays(ym){
+  const y=+ym.slice(0,4),m=+ym.slice(5,7);
+  if(!y||!m)return [];
+  const hol=Object.assign(ltHolidays(y),ltHolidays(y+1)),out=[];
+  for(let d=1;d<=tsMonthLen(ym);d++){
+    const dt=new Date(Date.UTC(y,m-1,d)),iso=isoOf(dt),dow=(dt.getUTCDay()+6)%7;
+    const weekend=dow>=5,holiday=hol[iso]||'';
+    const work=!weekend&&!holiday;
+    out.push({d,iso,dow,weekend,holiday,work,
+      short:work&&!!hol[isoOf(new Date(dt.getTime()+864e5))]});
+  }
+  return out;
+}
+const tsDowLabel=dow=>(LANG==='lt'?TS_DOW_LT:TS_DOW_EN)[dow];
+/* Working days and the hours they add up to, for one daily norm. */
+function tsNorm(ym,perDay){
+  const h=num(perDay)||num(S.settings.tsHours)||8;
+  let days=0,hours=0;
+  tsDays(ym).forEach(x=>{if(x.work){days++;hours+=h-(x.short?1:0);}});
+  return {days,hours:r2(hours)};
+}
+/* "8" -> 8 hours worked · "A" -> a code, no hours · "DP 8" / "8 DP" -> both */
+function tsParse(v){
+  const x=String(v==null?'':v).trim();
+  if(!x)return null;
+  if(/^[0-9]+([.,][0-9]+)?$/.test(x))return {code:'FD',hours:num(x)};
+  let m=/^([^0-9\s]{1,4})\s*([0-9]+(?:[.,][0-9]+)?)?$/.exec(x);
+  if(m)return {code:m[1].toUpperCase(),hours:m[2]?num(m[2]):0};
+  m=/^([0-9]+(?:[.,][0-9]+)?)\s*([^0-9\s]{1,4})$/.exec(x);
+  if(m)return {code:m[2].toUpperCase(),hours:num(m[1])};
+  return {code:x.toUpperCase().slice(0,4),hours:0};
+}
+/* An unlisted code still counts as worked when hours were written against it;
+   a listed absence code never does. */
+const tsWorks=code=>{const k=TS_BY_CODE[code];return k?!!k.work:true;};
+function tsRowTotals(row,ym){
+  const by={};let hours=0,days=0;
+  tsDays(ym).forEach(x=>{
+    const p=tsParse((row.days||{})[x.d]);
+    if(!p)return;
+    const key=p.code||'FD',b=by[key]||(by[key]={hours:0,days:0});
+    b.hours=r2(b.hours+p.hours);b.days++;
+    if(tsWorks(key)&&p.hours){hours=r2(hours+p.hours);days++;}
+  });
+  return {hours,days,by};
+}
+function tsTotals(ts){
+  const per={},by={};let hours=0,days=0;
+  (ts.rows||[]).forEach(r=>{
+    const tt=tsRowTotals(r,ts.month);
+    hours=r2(hours+tt.hours);days+=tt.days;
+    for(const k in tt.by){
+      const b=by[k]||(by[k]={hours:0,days:0});
+      b.hours=r2(b.hours+tt.by[k].hours);b.days+=tt.by[k].days;
+    }
+  });
+  tsDays(ts.month).forEach(x=>{
+    let h=0;
+    (ts.rows||[]).forEach(r=>{const p=tsParse((r.days||{})[x.d]);if(p&&tsWorks(p.code))h=r2(h+p.hours);});
+    per[x.d]=h;
+  });
+  return {hours,days,by,per};
+}
+const tsLabel=code=>{const k=TS_BY_CODE[code];return k?t(k.k):t('tsOtherCode');};
+
+/* ---------- sheet + employee plumbing ---------- */
+function tsBlank(month){
+  return {id:uid(),month,dept:S.settings.tsDept||'',no:'',rows:[],note:'',
+          madeBy:S.settings.tsMadeBy||'',madeByPos:S.settings.tsMadeByPos||'',
+          approvedBy:S.seller.director||'',approvedPos:'',
+          createdAt:new Date().toISOString()};
+}
+function tsRowOf(emp){
+  return {empId:emp.id,name:emp.name||'',position:emp.position||'',
+          tabNo:emp.tabNo||'',hours:num(emp.hours)||num(S.settings.tsHours)||8,days:{}};
+}
+function tsCommit(){
+  if(!TS)return false;
+  const ix=S.timesheets.findIndex(x=>x.id===TS.id);
+  const copy=JSON.parse(JSON.stringify(TS));
+  if(ix>=0)S.timesheets[ix]=copy;else S.timesheets.push(copy);
+  save();
+  return true;
+}
+function openSheet(id){
+  const ts=S.timesheets.find(x=>x.id===id);
+  if(!ts)return;
+  TS=JSON.parse(JSON.stringify(ts));
+  go('sheet');
+}
+function newSheet(){
+  const now=today().slice(0,7);
+  openModal(t('tsNew'),`
+    <div class="grid2">
+      <label class="f"><span class="l">${esc(t('tsPickMonth'))}</span>
+        <input type="month" id="tsmM" value="${esc(now)}"></label>
+      <label class="f"><span class="l">${esc(t('tsNo'))}</span>
+        <input id="tsmNo" placeholder="1"></label>
+    </div>
+    <label class="f" style="margin-top:10px"><span class="l">${esc(t('tsDept'))}</span>
+      <input id="tsmDept" value="${esc(S.settings.tsDept||'')}"></label>
+    <div class="note" style="margin-top:12px">${esc(t('tsCopyPrev'))}</div>`,
+    `<button class="btn" data-mclose>${esc(t('cancel'))}</button>
+     <button class="btn primary" id="tsmGo">${esc(t('tsCreate'))}</button>`,
+    ()=>{
+      $('#tsmGo').onclick=()=>{
+        const month=($('#tsmM').value||now).slice(0,7);
+        if(S.timesheets.some(x=>x.month===month&&x.dept===($('#tsmDept').value||''))){
+          toast(t('tsExists'),true);return;
+        }
+        const ts=tsBlank(month);
+        ts.no=$('#tsmNo').value||'';
+        ts.dept=$('#tsmDept').value||'';
+        /* carry last month's line-up forward, or fall back to everyone active */
+        const prev=S.timesheets.filter(x=>x.month<month).sort((a,b)=>a.month<b.month?1:-1)[0];
+        const source=prev&&prev.rows.length
+          ? prev.rows.map(r=>S.employees.find(e=>e.id===r.empId)||{id:r.empId,name:r.name,
+              position:r.position,tabNo:r.tabNo,hours:r.hours})
+          : S.employees.filter(e=>e.active!==false);
+        ts.rows=source.map(tsRowOf);
+        S.timesheets.push(ts);
+        S.settings.tsDept=ts.dept;
+        saveNow();closeModal();openSheet(ts.id);
+      };
+    });
+}
+
+/* ---------- employees ---------- */
+function employeesModal(){
+  const draw=()=>{
+    const box=$('#empBox');
+    box.innerHTML=S.employees.length?`
+      <div class="tblwrap"><table><thead><tr>
+        ${TS?`<th style="width:34px"></th>`:''}
+        <th>${esc(t('tsEmpName'))}</th><th>${esc(t('tsEmpPos'))}</th>
+        <th style="width:90px">${esc(t('tsEmpTab'))}</th>
+        <th style="width:80px" class="num">${esc(t('tsEmpHours'))}</th>
+        <th style="width:70px">${esc(t('tsEmpActive'))}</th><th style="width:36px"></th>
+      </tr></thead><tbody>
+        ${S.employees.map(e=>{
+          const on=TS&&(TS.rows||[]).some(r=>r.empId===e.id);
+          return `<tr>
+          ${TS?`<td><input type="checkbox" data-epick="${e.id}" ${on?'checked disabled':''}></td>`:''}
+          <td><input data-ef="name" data-eid="${e.id}" value="${esc(e.name||'')}"></td>
+          <td><input data-ef="position" data-eid="${e.id}" value="${esc(e.position||'')}"></td>
+          <td><input data-ef="tabNo" data-eid="${e.id}" value="${esc(e.tabNo||'')}"></td>
+          <td><input type="number" step="0.5" min="0" max="24" class="num" data-ef="hours" data-eid="${e.id}" value="${esc(e.hours||S.settings.tsHours||8)}"></td>
+          <td><input type="checkbox" data-ea="${e.id}" ${e.active!==false?'checked':''}></td>
+          <td><button class="btn sm" data-edel="${e.id}">✕</button></td></tr>`;}).join('')}
+      </tbody></table></div>`
+      :`<div class="empty"><div class="big">${esc(t('tsEmpNone'))}</div></div>`;
+    box.querySelectorAll('[data-ef]').forEach(inp=>{
+      inp.oninput=()=>{
+        const e=S.employees.find(x=>x.id===inp.dataset.eid);
+        if(!e)return;
+        e[inp.dataset.ef]=inp.dataset.ef==='hours'?num(inp.value):inp.value;
+        save();
+      };
+    });
+    box.querySelectorAll('[data-ea]').forEach(cb=>cb.onchange=()=>{
+      const e=S.employees.find(x=>x.id===cb.dataset.ea);
+      if(e){e.active=cb.checked;save();}
+    });
+    box.querySelectorAll('[data-edel]').forEach(b=>b.onclick=()=>{
+      S.employees=S.employees.filter(x=>x.id!==b.dataset.edel);saveNow();draw();
+    });
+  };
+  openModal(t('tsEmpTitle'),
+    `<div id="empBox"></div>
+     <div class="btnrow" style="margin-top:12px">
+       <button class="btn sm" id="empAdd">${esc(t('tsEmpAdd'))}</button>
+     </div>`,
+    `<button class="btn" data-mclose>${esc(t('close'))}</button>
+     ${TS?`<button class="btn primary" id="empTake">${esc(t('tsAddRow'))}</button>`:''}`,
+    ()=>{
+      draw();
+      $('#empAdd').onclick=()=>{
+        S.employees.push({id:uid(),name:'',position:'',tabNo:'',
+                          hours:num(S.settings.tsHours)||8,active:true});
+        saveNow();draw();
+        const last=$('#empBox').querySelectorAll('[data-ef="name"]');
+        if(last.length)last[last.length-1].focus();
+      };
+      const take=$('#empTake');
+      if(take)take.onclick=()=>{
+        const picked=Array.from($('#empBox').querySelectorAll('[data-epick]'))
+          .filter(c=>c.checked&&!c.disabled).map(c=>c.dataset.epick);
+        if(!picked.length){closeModal();return;}
+        picked.forEach(id=>{
+          const e=S.employees.find(x=>x.id===id);
+          if(e&&!TS.rows.some(r=>r.empId===id))TS.rows.push(tsRowOf(e));
+        });
+        tsCommit();closeModal();renderSheet();
+      };
+    });
+}
+</script>
+<script>
+/* ---------- žiniaraščių sąrašas ---------- */
+let tsFilter={q:''};
+/* hours read better without trailing zeros: 168, 167,5 */
+const tsH=n=>{
+  const x=r2(num(n));
+  if(!x)return '0';
+  const s=(Math.abs(x-Math.round(x))<0.005)?String(Math.round(x)):String(x);
+  return LANG==='lt'?s.replace('.',','):s;
+};
+function renderSheets(){
+  let list=S.timesheets.slice().sort((a,b)=>(b.month||'').localeCompare(a.month||''));
+  if(tsFilter.q){
+    const q=normQ(tsFilter.q);
+    list=list.filter(x=>normQ([x.month,monthLabel(x.month),x.dept,x.no].join(' ')).includes(q));
+  }
+  $('#p-sheets').innerHTML=`
+  <div class="card"><div class="head">
+    <input id="tsQ" placeholder="${esc(t('tsSearch'))}" value="${esc(tsFilter.q)}" style="max-width:320px">
+    <div class="grow"></div>
+    <span class="pill mono">${list.length}</span>
+    <button class="btn sm" id="tsEmpBtn">${esc(t('tsEmpManage'))}</button>
+    <button class="btn sm primary" id="tsNewBtn">＋ ${esc(t('tsNew'))}</button>
+  </div>
+  ${list.length?`<div class="body tight"><div class="tblwrap" style="border:0"><table><thead><tr>
+      <th>${esc(t('colMonth'))}</th><th>${esc(t('tsDept'))}</th><th>${esc(t('tsNo'))}</th>
+      <th class="num">${esc(t('colEmployees'))}</th>
+      <th class="num">${esc(t('tsWorkDays'))}</th>
+      <th class="num">${esc(t('tsNormHours'))}</th>
+      <th class="num">${esc(t('colWorked'))}</th></tr></thead><tbody>
+      ${list.map(x=>{const tt=tsTotals(x),nm=tsNorm(x.month,S.settings.tsHours);
+        return `<tr class="clickable" data-ts="${x.id}">
+        <td><b>${esc(monthLabel(x.month))}</b></td>
+        <td class="muted">${esc(x.dept||'—')}</td>
+        <td class="mono">${esc(x.no||'—')}</td>
+        <td class="num">${(x.rows||[]).length}</td>
+        <td class="num">${nm.days}</td>
+        <td class="num">${tsH(nm.hours)}</td>
+        <td class="num"><b>${tsH(tt.hours)}</b></td></tr>`;}).join('')}
+    </tbody></table></div></div>`
+    :`<div class="empty"><div class="big">${esc(t('tsNone'))}</div>${esc(t('tsNoneSub'))}</div>`}
+  </div>`;
+  const q=$('#tsQ');
+  q.oninput=()=>{tsFilter.q=q.value;renderSheets();const e=$('#tsQ');e.focus();
+    e.setSelectionRange(e.value.length,e.value.length);};
+  $('#tsNewBtn').onclick=newSheet;
+  $('#tsEmpBtn').onclick=employeesModal;
+  $$('#p-sheets [data-ts]').forEach(tr=>tr.onclick=()=>openSheet(tr.dataset.ts));
+}
+
+/* ---------- the grid ---------- */
+function tsSummaryHtml(tot){
+  const keys=Object.keys(tot.by).sort((a,b)=>tot.by[b].hours-tot.by[a].hours||(a<b?-1:1));
+  if(!keys.length)return `<div class="muted">${esc(t('tsNoRowsSub'))}</div>`;
+  return `<div class="tblwrap"><table><thead><tr>
+    <th style="width:60px">${esc(t('tsCode'))}</th><th>${esc(t('tsLegend'))}</th>
+    <th class="num" style="width:80px">${esc(t('tsCodeDays'))}</th>
+    <th class="num" style="width:90px">${esc(t('tsCodeHours'))}</th></tr></thead><tbody>
+    ${keys.map(k=>`<tr><td class="mono"><b>${esc(k)}</b></td>
+      <td>${esc(tsLabel(k))}</td><td class="num">${tot.by[k].days}</td>
+      <td class="num">${tsH(tot.by[k].hours)}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+function tsExpected(ts){
+  return r2((ts.rows||[]).reduce((a,r)=>a+tsNorm(ts.month,r.hours).hours,0));
+}
+function paintTsTotals(){
+  if(!TS)return;
+  const tot=tsTotals(TS);
+  (TS.rows||[]).forEach((r,i)=>{
+    const tt=tsRowTotals(r,TS.month);
+    const d=$('#tsD'+i),h=$('#tsH'+i);
+    if(d)d.textContent=tt.days||'';
+    if(h)h.textContent=tt.hours?tsH(tt.hours):'';
+  });
+  tsDays(TS.month).forEach(x=>{
+    const el=$('#tsC'+x.d);
+    if(el)el.textContent=tot.per[x.d]?tsH(tot.per[x.d]):'';
+  });
+  const g=$('#tsGrand');if(g)g.textContent=tsH(tot.hours);
+  const gd=$('#tsGrandD');if(gd)gd.textContent=tot.days||'';
+  const sum=$('#tsSum');if(sum)sum.innerHTML=tsSummaryHtml(tot);
+  const exp=tsExpected(TS),df=r2(tot.hours-exp);
+  const dv=$('#tsKpiDiff');
+  if(dv){
+    dv.textContent=(df>0?'+':'')+tsH(df);
+    dv.className='kv '+(Math.abs(df)<0.005?'':(df>0?'up':'down'));
+  }
+  const wv=$('#tsKpiWorked');if(wv)wv.textContent=tsH(tot.hours);
+}
+function tsGridHtml(){
+  const days=tsDays(TS.month),tot=tsTotals(TS);
+  const head=days.map(x=>`<th class="d ${x.holiday?'hol':(x.weekend?'wknd':'')}"
+      title="${esc(x.iso+(x.holiday?' · '+x.holiday:x.weekend?' · '+t('tsWeekend'):'')+(x.short?' · '+t('tsShort'):''))}">
+      ${x.d}<i>${esc(tsDowLabel(x.dow))}</i></th>`).join('');
+  return `<table class="tsg"><colgroup>
+    <col class="nr"><col class="nm"><col class="ps">
+    ${days.map(()=>'<col class="dy">').join('')}
+    <col class="tt"><col class="tt"><col class="mn"></colgroup><thead><tr>
+    <th class="stick c-nr">#</th>
+    <th class="stick c-name"><div class="cw">${esc(t('tsEmpName'))}</div></th>
+    <th class="stick c-pos"><div class="cw">${esc(t('tsEmpPos'))}</div></th>
+    ${head}
+    <th class="tot t-days" title="${esc(t('tsWorkedDays'))}">${esc(t('tsCodeDays'))}</th>
+    <th class="tot t-hours" title="${esc(t('tsWorkedHours'))}">${esc(t('tsCodeHours'))}</th>
+    <th class="tot t-menu"></th></tr></thead>
+  <tbody>
+    ${TS.rows.map((r,i)=>{
+      const tt=tsRowTotals(r,TS.month);
+      return `<tr>
+        <td class="stick c-nr">${i+1}</td>
+        <td class="stick c-name" title="${esc(r.name||'')}"><div class="cw">${esc(r.name||'—')}</div></td>
+        <td class="stick c-pos" title="${esc(r.position||'')}"><div class="cw">${esc(r.position||'')}</div></td>
+        ${days.map(x=>`<td class="d ${x.holiday?'hol':(x.weekend?'wknd':'')}">
+          <input data-r="${i}" data-d="${x.d}" maxlength="6" autocomplete="off"
+                 value="${esc((r.days||{})[x.d]||'')}"></td>`).join('')}
+        <td class="tot t-days" id="tsD${i}">${tt.days||''}</td>
+        <td class="tot t-hours" id="tsH${i}">${tt.hours?tsH(tt.hours):''}</td>
+        <td class="tot t-menu"><button class="btn sm" data-rowmenu="${i}" title="${esc(t('tsFillRow'))}">⋯</button></td>
+      </tr>`;}).join('')}
+  </tbody>
+  <tfoot><tr>
+    <td class="stick c-nr"></td>
+    <td class="stick c-name"><div class="cw">${esc(t('tsTotalRow'))}</div></td>
+    <td class="stick c-pos"><div class="cw"></div></td>
+    ${days.map(x=>`<td class="d ${x.holiday?'hol':(x.weekend?'wknd':'')}" id="tsC${x.d}">${tot.per[x.d]?tsH(tot.per[x.d]):''}</td>`).join('')}
+    <td class="tot t-days" id="tsGrandD">${tot.days||''}</td>
+    <td class="tot t-hours" id="tsGrand">${tsH(tot.hours)}</td>
+    <td class="tot t-menu"></td>
+  </tr></tfoot></table>`;
+}
+function tsFocus(r,d){
+  const el=document.querySelector(`.tsg input[data-r="${r}"][data-d="${d}"]`);
+  if(el){el.focus();el.select();}
+}
+function tsFillRow(i,overwrite){
+  const row=TS.rows[i];
+  if(!row)return;
+  row.days=row.days||{};
+  const h=num(row.hours)||num(S.settings.tsHours)||8;
+  tsDays(TS.month).forEach(x=>{
+    if(!x.work)return;
+    if(!overwrite&&String(row.days[x.d]||'').trim())return;
+    row.days[x.d]=tsH(h-(x.short?1:0));
+  });
+}
+function renderSheet(){
+  if(!TS){go('sheets');return;}
+  const norm=tsNorm(TS.month,S.settings.tsHours),tot=tsTotals(TS);
+  const exp=tsExpected(TS),df=r2(tot.hours-exp);
+  $('#p-sheet').innerHTML=`
+  <div class="btnrow" style="margin-bottom:12px">
+    <button class="btn sm" id="tsBack">${esc(t('tsBack'))}</button>
+    <div class="grow"></div>
+    <button class="btn sm" id="tsEmp">${esc(t('tsEmpManage'))}</button>
+    <button class="btn sm" id="tsCsv">${esc(t('tsCsv'))}</button>
+    <button class="btn sm" id="tsDel">${esc(t('tsDelete'))}</button>
+    <button class="btn sm primary" id="tsPrint">${esc(t('tsPrint'))}</button>
+  </div>
+
+  <div class="card"><div class="body">
+    <div class="grid4">
+      <label class="f"><span class="l">${esc(t('tsPickMonth'))}</span>
+        <input type="month" id="tsMonth" value="${esc(TS.month)}"></label>
+      <label class="f"><span class="l">${esc(t('tsDept'))}</span>
+        <input id="tsDept" value="${esc(TS.dept||'')}"></label>
+      <label class="f"><span class="l">${esc(t('tsNo'))}</span>
+        <input id="tsNo" value="${esc(TS.no||'')}"></label>
+      <label class="f"><span class="l">${esc(t('tsEmpHours'))}</span>
+        <input type="number" step="0.5" min="1" max="24" id="tsStd" value="${esc(S.settings.tsHours||8)}"></label>
+    </div>
+    <div class="kpis" style="margin-top:14px;grid-template-columns:repeat(4,minmax(0,1fr))">
+      <div class="kpi"><div class="kl">${esc(t('tsWorkDays'))}</div><div class="kv">${norm.days}</div>
+        <div class="ks">${esc(monthLabel(TS.month))}</div></div>
+      <div class="kpi"><div class="kl">${esc(t('tsNormHours'))}</div><div class="kv">${tsH(norm.hours)}</div>
+        <div class="ks">${esc(t('tsEmpHours'))} ${esc(String(S.settings.tsHours||8))}</div></div>
+      <div class="kpi ok"><div class="kl">${esc(t('tsWorkedHours'))}</div>
+        <div class="kv" id="tsKpiWorked">${tsH(tot.hours)}</div>
+        <div class="ks">${TS.rows.length} ${esc(t('tsEmployees').toLowerCase())}</div></div>
+      <div class="kpi"><div class="kl">${esc(t('tsDiff'))}</div>
+        <div class="kv ${Math.abs(df)<0.005?'':(df>0?'up':'down')}" id="tsKpiDiff">${(df>0?'+':'')+tsH(df)}</div>
+        <div class="ks">${esc(t('tsNorm'))} ${tsH(exp)}</div></div>
+    </div>
+  </div></div>
+
+  <div class="card" style="margin-top:14px"><div class="head">
+    <b>${esc(t('tsTitle'))}</b>
+    <div class="grow"></div>
+    <button class="btn sm" id="tsAdd">${esc(t('tsAddRow'))}</button>
+    <button class="btn sm" id="tsFill">${esc(t('tsFillWork'))}</button>
+  </div>
+  ${TS.rows.length?`<div class="body tight">
+      <div class="tsgrid-wrap">${tsGridHtml()}</div>
+      <div class="muted" style="margin-top:8px">${esc(t('tsLegendHint'))}</div>
+    </div>`
+    :`<div class="empty"><div class="big">${esc(t('tsNoRows'))}</div>${esc(t('tsNoRowsSub'))}</div>`}
+  </div>
+
+  <div class="grid2" style="margin-top:14px">
+    <div class="card"><div class="head"><b>${esc(t('tsSummary'))}</b></div>
+      <div class="body tight" id="tsSum">${tsSummaryHtml(tot)}</div></div>
+    <div class="card"><div class="head"><b>${esc(t('tsLegend'))}</b></div>
+      <div class="body"><div class="tslegend">
+        ${TS_CODES.map(c=>`<div><b class="mono">${esc(c.c)}</b> ${esc(t(c.k))}</div>`).join('')}
+      </div></div></div>
+  </div>
+
+  <div class="card" style="margin-top:14px"><div class="body"><div class="grid4">
+    <label class="f"><span class="l">${esc(t('tsMadeBy'))}</span>
+      <input id="tsMade" value="${esc(TS.madeBy||'')}"></label>
+    <label class="f"><span class="l">${esc(t('tsPositionLbl'))}</span>
+      <input id="tsMadePos" value="${esc(TS.madeByPos||'')}"></label>
+    <label class="f"><span class="l">${esc(t('tsApproved'))}</span>
+      <input id="tsAppr" value="${esc(TS.approvedBy||'')}"></label>
+    <label class="f"><span class="l">${esc(t('tsPositionLbl'))}</span>
+      <input id="tsApprPos" value="${esc(TS.approvedPos||'')}"></label>
+  </div></div></div>`;
+
+  $('#tsBack').onclick=()=>{tsCommit();TS=null;go('sheets');};
+  $('#tsEmp').onclick=employeesModal;
+  $('#tsAdd').onclick=employeesModal;
+  $('#tsCsv').onclick=()=>tsExportCsv(TS);
+  $('#tsPrint').onclick=()=>tsPrint(TS);
+  $('#tsDel').onclick=()=>confirmBox(monthLabel(TS.month),()=>{
+    S.timesheets=S.timesheets.filter(x=>x.id!==TS.id);
+    TS=null;saveNow();toast(t('deleted'));go('sheets');
+  });
+  $('#tsMonth').onchange=e=>{TS.month=(e.target.value||TS.month).slice(0,7);tsCommit();renderSheet();};
+  $('#tsDept').oninput=e=>{TS.dept=e.target.value;S.settings.tsDept=TS.dept;tsCommit();};
+  $('#tsNo').oninput=e=>{TS.no=e.target.value;tsCommit();};
+  $('#tsStd').onchange=e=>{S.settings.tsHours=num(e.target.value)||8;saveNow();renderSheet();};
+  $('#tsMade').oninput=e=>{TS.madeBy=e.target.value;S.settings.tsMadeBy=TS.madeBy;tsCommit();};
+  $('#tsMadePos').oninput=e=>{TS.madeByPos=e.target.value;S.settings.tsMadeByPos=TS.madeByPos;tsCommit();};
+  $('#tsAppr').oninput=e=>{TS.approvedBy=e.target.value;tsCommit();};
+  $('#tsApprPos').oninput=e=>{TS.approvedPos=e.target.value;tsCommit();};
+  const fill=$('#tsFill');
+  if(fill)fill.onclick=()=>{
+    TS.rows.forEach((r,i)=>tsFillRow(i,false));
+    tsCommit();renderSheet();toast(t('tsFilled'));
+  };
+  bindTsGrid();
+}
+function bindTsGrid(){
+  const wrap=$('#p-sheet .tsgrid-wrap');
+  if(!wrap)return;
+  const days=tsDays(TS.month),last=days.length?days[days.length-1].d:31;
+  wrap.querySelectorAll('.tsg input[data-r]').forEach(inp=>{
+    inp.oninput=()=>{
+      const r=+inp.dataset.r,d=+inp.dataset.d,row=TS.rows[r];
+      if(!row)return;
+      row.days=row.days||{};
+      const v=inp.value.trim();
+      if(v)row.days[d]=v;else delete row.days[d];
+      paintTsTotals();
+      tsCommit();
+    };
+    /* the grid is filled by hand, so it navigates like a spreadsheet */
+    inp.onkeydown=e=>{
+      const r=+inp.dataset.r,d=+inp.dataset.d;
+      const rows=TS.rows.length;
+      if(e.key==='ArrowDown'||e.key==='Enter'){e.preventDefault();tsFocus(Math.min(rows-1,r+1),d);}
+      else if(e.key==='ArrowUp'){e.preventDefault();tsFocus(Math.max(0,r-1),d);}
+      else if(e.key==='ArrowRight'&&inp.selectionStart>=inp.value.length){e.preventDefault();
+        if(d<last)tsFocus(r,d+1);else if(r<rows-1)tsFocus(r+1,days[0].d);}
+      else if(e.key==='ArrowLeft'&&inp.selectionStart===0){e.preventDefault();
+        if(d>days[0].d)tsFocus(r,d-1);else if(r>0)tsFocus(r-1,last);}
+    };
+    inp.onfocus=()=>inp.select();
+  });
+  wrap.querySelectorAll('[data-rowmenu]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.rowmenu,row=TS.rows[i];
+    if(!row)return;
+    openModal(row.name||t('tsEmpName'),
+      `<div class="note">${esc(t('tsFillHint'))}</div>
+       <div class="btnrow" style="margin-top:12px;flex-direction:column;align-items:stretch;gap:8px">
+         <button class="btn" id="tsrFill">${esc(t('tsFillRow'))}</button>
+         <button class="btn" id="tsrClear">${esc(t('tsClearRow'))}</button>
+         <button class="btn" id="tsrDrop">${esc(t('tsRemoveRow'))}</button>
+       </div>`,
+      `<button class="btn" data-mclose>${esc(t('close'))}</button>`,
+      ()=>{
+        $('#tsrFill').onclick=()=>{tsFillRow(i,true);tsCommit();closeModal();renderSheet();};
+        $('#tsrClear').onclick=()=>{row.days={};tsCommit();closeModal();renderSheet();};
+        $('#tsrDrop').onclick=()=>{TS.rows.splice(i,1);tsCommit();closeModal();renderSheet();};
+      });
+  });
+}
+
+/* ---------- exports ---------- */
+function tsExportCsv(ts){
+  const days=tsDays(ts.month);
+  const head=['Nr','Vardas pavarde','Pareigos','Tab Nr']
+    .concat(days.map(x=>String(x.d)))
+    .concat(['Dirbta d.','Dirbta val.']);
+  const rows=(ts.rows||[]).map((r,i)=>{
+    const tt=tsRowTotals(r,ts.month);
+    return [i+1,r.name||'',r.position||'',r.tabNo||'']
+      .concat(days.map(x=>(r.days||{})[x.d]||''))
+      .concat([tt.days,tsH(tt.hours)]);
+  });
+  const tot=tsTotals(ts);
+  rows.push(['','Iš viso','','']
+    .concat(days.map(x=>tot.per[x.d]?tsH(tot.per[x.d]):''))
+    .concat([tot.days,tsH(tot.hours)]));
+  download(`ziniarastis-${ts.month}${ts.dept?'-'+slug(ts.dept):''}.csv`,
+           csvOf(head,rows),'text/csv;charset=utf-8');
+}
+function tsPrint(ts){
+  const w=window.open('','_blank');
+  if(!w){toast(t('popupBlocked'),true);return;}
+  w.document.open();w.document.write(sheetHtml(ts));w.document.close();
+}
+</script>
+<script>
+/* =========================================================================
+   The printable žiniaraštis: A4 landscape, because 31 day columns plus the
+   names never fit portrait.
+   ========================================================================= */
+function sheetHtml(ts){
+  const days=tsDays(ts.month),tot=tsTotals(ts);
+  const sel=S.seller||{};
+  const used=Object.keys(tot.by).sort();
+  const cell=(r,d)=>{
+    const p=tsParse((r.days||{})[d]);
+    if(!p)return '';
+    if(p.code==='FD')return tsH(p.hours);
+    return `<b>${esc(p.code)}</b>${p.hours?'<br>'+tsH(p.hours):''}`;
+  };
+  return `<!DOCTYPE html><html lang="${LANG}"><head><meta charset="utf-8">
+<title>${esc(t('tsTitle'))} ${esc(monthLabel(ts.month))}</title>
+<style>
+  @page{size:A4 landscape;margin:9mm}
+  *{box-sizing:border-box}
+  body{font:9px/1.35 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;margin:0}
+  .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px}
+  .co{font-size:10.5px;font-weight:700}
+  .co div{font-weight:400;color:#444;font-size:8.5px}
+  h1{font-size:12.5px;text-align:center;margin:2px 0 3px;text-transform:uppercase;letter-spacing:.03em}
+  .sub{text-align:center;color:#333;margin-bottom:8px;font-size:9.5px}
+  table{border-collapse:collapse;width:100%;table-layout:fixed}
+  th,td{border:.5px solid #666;padding:1.5px 2px;text-align:center;overflow:hidden}
+  thead th{background:#eceff3;font-size:8px;font-weight:700}
+  .nm{text-align:left;width:120px;font-weight:600;font-size:8.5px}
+  .ps{text-align:left;width:78px;font-size:8px;color:#333}
+  .ix{width:18px;color:#555}
+  .tb{width:34px;font-size:8px}
+  .d{width:auto;font-size:8.5px;font-variant-numeric:tabular-nums}
+  .wk{background:#f2f4f7}.ho{background:#fbeceb}
+  .tt{width:34px;background:#f7f8fb;font-weight:700;font-variant-numeric:tabular-nums}
+  tfoot td{background:#eceff3;font-weight:700}
+  .after{display:flex;gap:14px;margin-top:9px;align-items:flex-start}
+  .after table{width:auto}
+  .after th,.after td{padding:1.5px 5px;text-align:left}
+  .lg{font-size:7.5px;color:#333;flex:1;columns:3;column-gap:12px}
+  .lg div{break-inside:avoid}
+  .sig{display:flex;gap:30px;margin-top:14px}
+  .sig div{flex:1}
+  .sl{border-top:.5px solid #666;margin-top:22px;padding-top:2px;font-size:7.5px;color:#555}
+  .noprint{margin-bottom:8px}
+  @media print{.noprint{display:none}}
+</style></head><body>
+<div class="noprint"><button onclick="window.print()">${esc(t('pdfPrintSave'))}</button></div>
+<div class="hdr">
+  <div class="co">${esc(sel.name||'')}
+    <div>${[sel.code?t('pdfCode')+' '+sel.code:'',sel.address||''].filter(Boolean).map(esc).join(' · ')}</div>
+  </div>
+  <div style="text-align:right;font-size:8.5px">
+    ${ts.no?esc(t('tsNo'))+' <b>'+esc(ts.no)+'</b><br>':''}
+    ${esc(t('tsWorkDays'))}: <b>${tsNorm(ts.month,S.settings.tsHours).days}</b> ·
+    ${esc(t('tsNormHours'))}: <b>${tsH(tsNorm(ts.month,S.settings.tsHours).hours)}</b>
+  </div>
+</div>
+<h1>${esc(t('tsTitle'))}</h1>
+<div class="sub">${esc(monthLabel(ts.month))}${ts.dept?' · '+esc(ts.dept):''}</div>
+<table><thead><tr>
+  <th class="ix">#</th><th class="nm">${esc(t('tsEmpName'))}</th>
+  <th class="ps">${esc(t('tsEmpPos'))}</th><th class="tb">${esc(t('tsEmpTab'))}</th>
+  ${days.map(x=>`<th class="d ${x.holiday?'ho':(x.weekend?'wk':'')}">${x.d}<br>${esc(tsDowLabel(x.dow))}</th>`).join('')}
+  <th class="tt">${esc(t('tsCodeDays'))}</th><th class="tt">${esc(t('tsCodeHours'))}</th>
+</tr></thead><tbody>
+  ${(ts.rows||[]).map((r,i)=>{
+    const tt=tsRowTotals(r,ts.month);
+    return `<tr>
+      <td class="ix">${i+1}</td><td class="nm">${esc(r.name||'')}</td>
+      <td class="ps">${esc(r.position||'')}</td><td class="tb">${esc(r.tabNo||'')}</td>
+      ${days.map(x=>`<td class="d ${x.holiday?'ho':(x.weekend?'wk':'')}">${cell(r,x.d)}</td>`).join('')}
+      <td class="tt">${tt.days||''}</td><td class="tt">${tt.hours?tsH(tt.hours):''}</td></tr>`;
+  }).join('')}
+</tbody><tfoot><tr>
+  <td class="ix"></td><td class="nm">${esc(t('tsTotalRow'))}</td><td class="ps"></td><td class="tb"></td>
+  ${days.map(x=>`<td class="d ${x.holiday?'ho':(x.weekend?'wk':'')}">${tot.per[x.d]?tsH(tot.per[x.d]):''}</td>`).join('')}
+  <td class="tt">${tot.days||''}</td><td class="tt">${tsH(tot.hours)}</td>
+</tr></tfoot></table>
+
+<div class="after">
+  ${used.length?`<table><thead><tr><th>${esc(t('tsCode'))}</th><th>${esc(t('tsLegend'))}</th>
+    <th>${esc(t('tsCodeDays'))}</th><th>${esc(t('tsCodeHours'))}</th></tr></thead><tbody>
+    ${used.map(k=>`<tr><td><b>${esc(k)}</b></td><td>${esc(tsLabel(k))}</td>
+      <td>${tot.by[k].days}</td><td>${tsH(tot.by[k].hours)}</td></tr>`).join('')}
+  </tbody></table>`:''}
+  <div class="lg">${TS_CODES.map(c=>`<div><b>${esc(c.c)}</b> — ${esc(t(c.k))}</div>`).join('')}</div>
+</div>
+
+<div class="sig">
+  <div><div class="sl">${esc(t('tsMadeBy'))}: ${esc(ts.madeByPos||'')} ${esc(ts.madeBy||'')}</div></div>
+  <div><div class="sl">${esc(t('tsApproved'))}: ${esc(ts.approvedPos||'')} ${esc(ts.approvedBy||'')}</div></div>
+</div>
+<script>window.onload=function(){setTimeout(function(){try{window.print()}catch(e){}},420)}<\/script>
+</body></html>`;
+}
+</script>
+
+<script>
+/* =========================================================================
    Minimal ZIP writer — "export everything" ships one archive holding the JSON
    backup, four CSVs, a printable HTML per invoice and a UBL XML per invoice.
    No library: entries are deflated with CompressionStream when the browser has
@@ -4760,6 +5588,7 @@ Object.defineProperties(window,{
   REG:  {get:()=>REG,  configurable:true},
   Cloud:{get:()=>Cloud,configurable:true},
   WB:   {get:()=>WB,   set:v=>{WB=v}, configurable:true},
+  TS:   {get:()=>TS,   set:v=>{TS=v}, configurable:true},
   STATE_V:{get:()=>STATE_V,configurable:true},
   CLOUD_SQL:{get:()=>CLOUD_SQL,configurable:true}
 });
@@ -4769,7 +5598,10 @@ Object.assign(window,{t,esc,num,r2,uid,deacc,normQ,money,today,cur,lineNet,eurSt
                       expMatch,periodDocHtml,parseImportDoc,importPlan,applyImport,invoiceCsv,
                       inferFormat,formatNo,rowsToInvoices,xlsxInvoices,readXlsx,readZip,toIso,
                       normaliseImported,makeZip,monthLabel,invTable,viewFromHash,go,
-                      openModal,closeModal,openInvoice,invStatus,calc,makeNumber});
+                      openModal,closeModal,openInvoice,invStatus,calc,makeNumber,
+                      easterSunday,ltHolidays,tsDays,tsNorm,tsParse,tsRowTotals,tsTotals,
+                      tsMonthLen,tsBlank,tsRowOf,tsFillRow,tsExpected,sheetHtml,tsH,
+                      TS_CODES,tsLabel,tsWorks});
 Object.defineProperty(window,'EXP',{get:()=>EXP,set:v=>{EXP=v},configurable:true});
 
 /* ===================== boot ===================== */
@@ -4792,7 +5624,7 @@ function boot(){
       if(VIEW==='editor'&&EDIT){if(commitInvoice()){toast(t('saved'));render();}}else{saveNow();toast(t('saved'));}}
   });
   const h=(location.hash||'').replace('#','');
-  go(TABS.some(x=>x.id===h&&h!=='editor'&&h!=='waybill')?h:'dash',true);
+  go(TABS.some(x=>x.id===h&&h!=='editor'&&h!=='waybill'&&h!=='sheet')?h:'dash',true);
   /* If the registry was downloaded before, bring it back silently. */
   REG.loadIfCached().then(ok=>{if(ok&&VIEW==='settings')paintRegPanel();});
   Cloud.load();paintCloud();Cloud.start();

@@ -230,11 +230,11 @@ function tests(W,D){
 
   /* ---------------------------------------------------------------- */
   grp('state migration');
-  eq('current version', W.STATE_V, 4);
+  eq('current version', W.STATE_V, 5);
   const v1={v:1,invoices:[],customers:[],items:[],
             seller:{name:'A'},settings:{series:'X',showWords:false,showSign:false,vatRate:9}};
   W.adopt(JSON.parse(JSON.stringify(v1)));
-  eq('version bumped', W.S.v, 4);
+  eq('version bumped', W.S.v, 5);
   eq('brand created', typeof W.S.brand, 'object');
   eq('showWords moved into brand', W.S.brand.showWords, false);
   eq('showSign moved into brand', W.S.brand.showSign, false);
@@ -249,15 +249,15 @@ function tests(W,D){
   const v2={v:2,invoices:[],customers:[],items:[],brand:{template:'classic'},settings:{series:'Y'}};
   const m2=W.migrate(JSON.parse(JSON.stringify(v2)));
   eq('v2 -> v3 keeps the brand', m2.brand.template, 'classic');
-  eq('v2 -> v4 bumps the version', m2.v, 4);
+  eq('v2 -> v5 bumps the version', m2.v, 5);
   eq('migrating a current doc is a no-op',
-     W.migrate({v:4,brand:{template:'minimal'},waybills:[{id:'x'}]}).waybills.length, 1);
+     W.migrate({v:5,brand:{template:'minimal'},waybills:[{id:'x'}]}).waybills.length, 1);
   /* v3 -> v4: the single driver becomes a crew */
   const m3=W.migrate({v:3,waybills:[
     {id:'a',driver:'Jonas Jonaitis',driverDoc:'AA1'},
     {id:'b',driver:'',driverDoc:''},
     {id:'c',drivers:[{name:'Jau masyvas',doc:'X'}]}]});
-  eq('v3 -> v4 version', m3.v, 4);
+  eq('v3 -> v5 version', m3.v, 5);
   eq('single driver became a one-entry crew', m3.waybills[0].drivers.length, 1);
   eq('driver name kept', m3.waybills[0].drivers[0].name, 'Jonas Jonaitis');
   eq('licence kept', m3.waybills[0].drivers[0].doc, 'AA1');
@@ -603,6 +603,111 @@ function tests(W,D){
   eq('every invoice still has a row', (grouped.match(/data-inv=/g)||[]).length, 3);
   eq('no dividers when grouping is off', (W.invTable(mList,false,false).match(/class="grp"/g)||[]).length, 0);
   eq('the dashboard table is untouched', (W.invTable(mList,true).match(/class="grp"/g)||[]).length, 0);
+
+  /* ---------------------------------------------------------------- */
+  grp('darbo laiko žiniaraštis — the calendar');
+  eq('Easter 2024', W.easterSunday(2024).toISOString().slice(0,10), '2024-03-31');
+  eq('Easter 2025', W.easterSunday(2025).toISOString().slice(0,10), '2025-04-20');
+  eq('Easter 2026', W.easterSunday(2026).toISOString().slice(0,10), '2026-04-05');
+  eq('Easter 2027', W.easterSunday(2027).toISOString().slice(0,10), '2027-03-28');
+  const hol=W.ltHolidays(2026);
+  eq('sixteen statutory holidays', Object.keys(hol).length, 16);
+  ok('fixed ones are there', !!hol['2026-02-16'] && !!hol['2026-07-06'] && !!hol['2026-12-25']);
+  ok('Easter Monday follows Easter', !!hol['2026-04-06']);
+  eq('Mother\'s day is the first Sunday of May', !!hol['2026-05-03'], true);
+  eq('Father\'s day is the first Sunday of June', !!hol['2026-06-07'], true);
+  const sep=W.tsDays('2026-09');
+  eq('September has 30 days', sep.length, 30);
+  eq('1 September 2026 is a Tuesday', sep[0].dow, 1);
+  eq('and it is a working day', sep[0].work, true);
+  eq('the 5th is a Saturday', sep[4].weekend, true);
+  eq('no holidays in September', sep.filter(d=>d.holiday).length, 0);
+  const dec=W.tsDays('2026-12');
+  eq('Christmas Eve is a holiday', dec[23].holiday, 'Kūčios');
+  eq('23 December is shortened', dec[22].short, true);
+  eq('31 December is shortened too', dec[30].short, true);
+  eq('an ordinary day is not', dec[15].short, false);
+  eq('September norm: days', W.tsNorm('2026-09',8).days, 22);
+  eq('September norm: hours', W.tsNorm('2026-09',8).hours, 176);
+  eq('December norm: days', W.tsNorm('2026-12',8).days, 21);
+  eq('December norm loses two hours to the eves', W.tsNorm('2026-12',8).hours, 166);
+  eq('a half-time norm halves', W.tsNorm('2026-09',4).hours, 88);
+  eq('month length, February 2028', W.tsMonthLen('2028-02'), 29);
+
+  grp('darbo laiko žiniaraštis — cells and totals');
+  eq('a bare number is time worked', JSON.stringify(W.tsParse('8')), '{"code":"FD","hours":8}');
+  eq('a decimal with a comma', W.tsParse('7,5').hours, 7.5);
+  eq('a bare code carries no hours', JSON.stringify(W.tsParse('A')), '{"code":"A","hours":0}');
+  eq('code then hours', JSON.stringify(W.tsParse('DP 8')), '{"code":"DP","hours":8}');
+  eq('hours then code', JSON.stringify(W.tsParse('8 VD')), '{"code":"VD","hours":8}');
+  eq('no space needed', JSON.stringify(W.tsParse('dp6')), '{"code":"DP","hours":6}');
+  eq('an empty cell is nothing', W.tsParse('  '), null);
+  ok('work codes count as worked', W.tsWorks('FD') && W.tsWorks('DP') && W.tsWorks('VD'));
+  ok('absence codes do not', !W.tsWorks('A') && !W.tsWorks('L') && !W.tsWorks('NA'));
+  ok('an unlisted code still counts its hours', W.tsWorks('XX'));
+
+  const row={empId:'e1',name:'Jonas',position:'Baldžius',hours:8,
+             days:{1:'8',2:'8',3:'A',4:'DP 6',7:'8'}};
+  const rt=W.tsRowTotals(row,'2026-09');
+  eq('hours worked ignore the absence', rt.hours, 30);
+  eq('days worked ignore it too', rt.days, 4);
+  eq('the absence is still counted as a day', rt.by.A.days, 1);
+  eq('and carries no hours', rt.by.A.hours, 0);
+  eq('rest-day work is its own code', rt.by.DP.hours, 6);
+
+  const sheet=W.tsBlank('2026-09');
+  sheet.rows=[row,{empId:'e2',name:'Ona',hours:4,days:{1:'4',2:'4'}}];
+  const st=W.tsTotals(sheet);
+  eq('sheet hours', st.hours, 38);
+  eq('sheet days', st.days, 6);
+  eq('the first of the month adds up across the crew', st.per[1], 12);
+  eq('a day nobody worked is zero', st.per[15], 0);
+
+  grp('darbo laiko žiniaraštis — filling it in');
+  W.S.settings.tsHours=8;
+  const fillSheet=W.tsBlank('2026-12');
+  fillSheet.rows=[{empId:'x',name:'A',hours:8,days:{}}];
+  const realTS=W.TS;W.TS=fillSheet;
+  W.tsFillRow(0,false);
+  eq('every working day got hours', Object.keys(fillSheet.rows[0].days).length, 21);
+  eq('a normal day gets the full shift', fillSheet.rows[0].days[15], '8');
+  eq('the day before Christmas Eve is an hour shorter', fillSheet.rows[0].days[23], '7');
+  eq('so is New Year\'s Eve', fillSheet.rows[0].days[31], '7');
+  eq('a weekend stays empty', fillSheet.rows[0].days[5], undefined);
+  eq('and so does the holiday itself', fillSheet.rows[0].days[25], undefined);
+  eq('the filled row matches the norm', W.tsRowTotals(fillSheet.rows[0],'2026-12').hours, 166);
+  /* filling again must not tread on what was typed by hand */
+  fillSheet.rows[0].days[15]='A';
+  W.tsFillRow(0,false);
+  eq('a hand-typed cell survives a refill', fillSheet.rows[0].days[15], 'A');
+  W.tsFillRow(0,true);
+  eq('unless the row is filled deliberately', fillSheet.rows[0].days[15], '8');
+  /* a part-timer has their own norm */
+  fillSheet.rows.push({empId:'y',name:'B',hours:4,days:{}});
+  W.tsFillRow(1,false);
+  eq('half-time fills half days', fillSheet.rows[1].days[15], '4');
+  eq('and expects half the month', W.tsExpected(fillSheet), 166+82);
+  W.TS=realTS;
+
+  grp('darbo laiko žiniaraštis — the printed form');
+  const pr=W.sheetHtml(fillSheet);
+  ok('the form is titled', pr.indexOf('DARBO LAIKO')>=0 || pr.indexOf(W.t('tsTitle'))>=0);
+  ok('it names the month', pr.indexOf(W.monthLabel('2026-12'))>=0);
+  ok('it prints landscape', pr.indexOf('A4 landscape')>=0);
+  ok('every employee is on it', pr.indexOf('>A<')>=0 || pr.indexOf('A</div>')>=0 || pr.indexOf('A</td>')>=0);
+  ok('the legend is printed', pr.indexOf(W.t('tsFD'))>=0);
+  ok('holidays are shaded', pr.indexOf('class="d ho"')>=0);
+
+  grp('darbo laiko žiniaraštis — state');
+  const migrated=W.adopt({v:4,invoices:[],customers:[]});
+  eq('state moved to v5', migrated.v, 5);
+  ok('an old backup gains the two new lists',
+     Array.isArray(migrated.employees) && Array.isArray(migrated.timesheets));
+  const carried=W.adopt({v:5,employees:[{id:'e9',name:'Kęstutis'}],
+    timesheets:[{id:'t9',month:'2026-05',rows:[]}]});
+  eq('employees survive a reload', carried.employees[0].name, 'Kęstutis');
+  eq('so do the sheets', carried.timesheets[0].month, '2026-05');
+  W.adopt({});W.S.settings.tsHours=8;
 
   /* ---------------------------------------------------------------- */
   grp('back button / history');
