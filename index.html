@@ -170,6 +170,28 @@
   .tsg tfoot td{position:sticky;bottom:0;z-index:2;background:#eef1f5;font-weight:650;
     font-family:var(--mono);font-size:11px;text-align:center;padding:5px 2px}
   .tsg tfoot td.stick{z-index:3}
+  /* the brush palette: pick a value, then drag it across the days it applies to */
+  .tsbrush{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .tsbrush .bl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink2);font-weight:650;margin-right:2px}
+  .tsbrush .bb{font:600 12px/1 var(--mono);min-width:34px;padding:7px 8px;border-radius:7px;
+    border:1px solid var(--line2);background:var(--paper);color:var(--ink);cursor:pointer}
+  .tsbrush .bb:hover{border-color:var(--acc)}
+  .tsbrush .bb.on{background:var(--acc);border-color:var(--acc);color:#fff}
+  .tsbrush .bh{font-size:11px;margin-left:4px}
+  .tsgrid-wrap.painting{cursor:cell}
+  .tsgrid-wrap.painting .tsg input{cursor:cell}
+  .tsgrid-wrap.painting .tsg thead th[data-day]{cursor:cell}
+  /* a working day nobody has accounted for */
+  .tsg td.d.gap{background:repeating-linear-gradient(-45deg,#fff6f5,#fff6f5 5px,#ffe9e6 5px,#ffe9e6 10px)}
+  .tsg td.d.off{background:var(--chip);opacity:.55}
+  .tsg .tot.t-hours.ok{color:var(--good)}
+  .tsg .tot.t-hours.low{color:var(--bad)}
+  .tsg .tot.t-hours.high{color:#b26b00}
+  .pill.gapbtn{background:var(--bad-bg,#fdecea);color:var(--bad);cursor:pointer;
+    border:0;font-weight:650;font-family:inherit;font-size:11px}
+  .pill.okpill{background:var(--good-bg);color:var(--good);border:0;
+    font-family:inherit;font-size:11px;cursor:pointer}
   .tslegend{columns:2;column-gap:18px;font-size:11.5px;color:var(--ink2);line-height:1.75}
   .tslegend div{break-inside:avoid}
   .tslegend b{color:var(--ink);margin-right:5px}
@@ -553,6 +575,20 @@ const I18N={
   tabSheets:"Žiniaraščiai",tabSheet:"Žiniaraštis",
   /* ---- darbo laiko apskaitos žiniaraštis ---- */
   tsTitle:"Darbo laiko apskaitos žiniaraštis",
+  tsBrushNorm:"Dienos norma pagal darbuotoją",tsBrushLbl:"Žymėti",tsBrushHint:"Pasirinkite žymę ir braukite per langelius",
+  tsBrushOn:"Braukite per langelius · dienos antraštė užpildo visą stulpelį",
+  tsErase:"Trinti langelį",tsPickBrush:"Pirmiausia pasirinkite žymę",
+  tsStampCol:"Spustelėkite — užpildys visą dieną",
+  tsKeysHint:"Tarpas — įrašo normą · Ctrl+D — nukopijuoja iš viršaus · rodyklės — judėjimas",
+  tsMissing:"Trūksta",tsMissingNone:"Viskas užpildyta",tsFindMissing:"Rasti trūkstamą langelį",
+  tsMissingTitle:"Žiniaraštis neužbaigtas",
+  tsMissingWarn:"Neužpildyta darbo dienų langelių: {n}. Jie liks tušti ir spausdintame žiniaraštyje.",
+  tsPrintAnyway:"Vis tiek spausdinti",tsShowMissing:"Rodyti trūkstamus",
+  tsFrom:"Dirba nuo",tsTo:"Dirba iki",
+  tsRangeHint:"Jei darbuotojas priimtas ar atleistas mėnesio viduryje — nurodykite datas, ir likusios dienos nebus laikomos trūkstamomis.",
+  tsFillGapsRow:"Užpildyti tik tuščias dienas",
+  tsDashTitle:"Darbo laiko žiniaraštis",tsDashGaps:"neužpildytų darbo dienų",
+  tsDashMissing:"žiniaraštis dar nesukurtas",tsDashOpen:"Užpildyti",
   tsCreate:"Sukurti",tsNew:"Naujas žiniaraštis",tsNone:"Žiniaraščių dar nėra",
   tsNoneSub:"Sukurkite mėnesio žiniaraštį ir pildykite dienas ranka.",
   tsPickMonth:"Mėnuo",tsDept:"Padalinys",tsNo:"Žiniaraščio Nr.",
@@ -820,6 +856,20 @@ const I18N={
   tabSheets:"Timesheets",tabSheet:"Timesheet",
   /* ---- working time record sheet ---- */
   tsTitle:"Working time record sheet",
+  tsBrushNorm:"Each employee's own shift",tsBrushLbl:"Stamp",tsBrushHint:"Pick a value, then drag across the cells",
+  tsBrushOn:"Drag across the cells · a day heading fills the whole column",
+  tsErase:"Clear the cell",tsPickBrush:"Pick a value first",
+  tsStampCol:"Click to fill the whole day",
+  tsKeysHint:"Space — the standard shift · Ctrl+D — copy from above · arrows to move",
+  tsMissing:"Missing",tsMissingNone:"Nothing missing",tsFindMissing:"Find the next empty cell",
+  tsMissingTitle:"The sheet is not finished",
+  tsMissingWarn:"{n} working-day cells are still empty. They will print empty too.",
+  tsPrintAnyway:"Print anyway",tsShowMissing:"Show me",
+  tsFrom:"Employed from",tsTo:"Employed until",
+  tsRangeHint:"If somebody joined or left mid-month, give the dates and the rest of the month stops counting as missing.",
+  tsFillGapsRow:"Fill only the empty days",
+  tsDashTitle:"Working time record sheet",tsDashGaps:"working days not filled in",
+  tsDashMissing:"no sheet has been made yet",tsDashOpen:"Fill it in",
   tsCreate:"Create",tsNew:"New timesheet",tsNone:"No timesheets yet",
   tsNoneSub:"Create a sheet for the month and fill the days in by hand.",
   tsPickMonth:"Month",tsDept:"Department",tsNo:"Sheet no.",
@@ -1681,6 +1731,7 @@ function renderDash(){
   const moNet=r2(mo.reduce((s,c)=>s+c.net,0)),moVat=r2(mo.reduce((s,c)=>s+c.vat,0)),moTot=r2(mo.reduce((s,c)=>s+c.total,0));
 
   const needSetup=!S.seller.name;
+  const tsNag=tsDue();
   const toDeliver=S.waybills.filter(w=>wbStatus(w)!=='delivered').length;
   const overdue=live.filter(i=>invStatus(i)==='over')
                     .sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
@@ -1711,6 +1762,13 @@ function renderDash(){
     <div class="kpi"><div class="kl">${esc(t('kpiVat'))}</div><div class="kv">${money(moVat)}</div>
       <div class="ks">${esc(t('kpiVatSub'))}</div></div>
   </div>
+  ${tsNag?`<div class="card"><div class="body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+     <div class="grow"><div class="eyebrow">▩ ${esc(t('tsDashTitle'))}</div>
+       <div class="muted" style="margin-top:4px">${esc(monthLabel(tsNag.month))} — ${
+         tsNag.kind==='missing'?esc(t('tsDashMissing')):`<b>${tsNag.n}</b> ${esc(t('tsDashGaps'))}`}</div></div>
+     <button class="btn ${tsNag.kind==='missing'?'':'primary'}" id="dashTs">${
+       esc(tsNag.kind==='missing'?t('tsNew'):t('tsDashOpen'))}</button>
+   </div></div>`:''}
   ${toDeliver?`<div class="card"><div class="body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
      <div class="grow"><div class="eyebrow">⛟ ${esc(t('kpiToDeliver'))}</div>
        <div class="muted" style="margin-top:4px">${toDeliver} ${esc(t('kpiToDeliverSub'))}</div></div>
@@ -1750,6 +1808,11 @@ function renderDash(){
 
   const sb=$('#dashSetupBtn');if(sb)sb.onclick=()=>go('settings');
   $('#dashNew').onclick=newInvoice;
+  const dts=$('#dashTs');
+  if(dts)dts.onclick=()=>{
+    if(tsNag.kind==='missing'){go('sheets');newSheet();}
+    else openSheet(tsNag.id);
+  };
   $('#dashAll').onclick=()=>go('invoices');
   const dw=$('#dashWb');if(dw)dw.onclick=()=>go('waybills');
   bindInvRows($('#p-dash'));
@@ -4383,6 +4446,69 @@ function tsNorm(ym,perDay){
   tsDays(ym).forEach(x=>{if(x.work){days++;hours+=h-(x.short?1:0);}});
   return {days,hours:r2(hours)};
 }
+/* Somebody hired on the 15th owes nothing for the 1st. Without this every
+   mid-month joiner and leaver reads as a hole in the sheet, for ever. */
+function tsRowOn(row,iso){
+  if(!row)return true;
+  if(row.from&&iso<row.from)return false;
+  if(row.to&&iso>row.to)return false;
+  return true;
+}
+/* The norm this particular person owes: their own daily hours, over the days
+   they were actually employed. */
+function tsRowNorm(row,ym){
+  const h=num(row&&row.hours)||num(S.settings.tsHours)||8;
+  let days=0,hours=0;
+  tsDays(ym).forEach(x=>{
+    if(!x.work||!tsRowOn(row,x.iso))return;
+    days++;hours+=h-(x.short?1:0);
+  });
+  return {days,hours:r2(hours)};
+}
+/* Every working day nobody accounted for. An absence code counts as filled —
+   the hole is a day with nothing written in it at all. Days still ahead of us
+   are not holes: filling September on the 11th should not report twelve.  */
+function tsGaps(ts,upTo){
+  const limit=upTo===undefined?today():upTo;
+  const days=tsDays(ts.month),out=[];
+  (ts.rows||[]).forEach((r,i)=>{
+    days.forEach(x=>{
+      if(!x.work||!tsRowOn(r,x.iso))return;
+      if(limit&&x.iso>limit)return;
+      if(String((r.days||{})[x.d]||'').trim())return;
+      out.push({row:i,day:x.d,name:r.name||''});
+    });
+  });
+  return out;
+}
+/* The value a stamp writes into one cell. "*" is each employee's own shift for
+   that day — an 8 painted across a half-timer's row would be a lie. */
+function tsBrushFor(r,d){
+  if(tsBrush!=='*')return tsBrush;
+  const row=(TS&&TS.rows[r])||null,day=tsDays(TS.month)[d-1];
+  if(!day||!day.work)return '';
+  const h=num(row&&row.hours)||num(S.settings.tsHours)||8;
+  return tsH(h-(day.short?1:0));
+}
+/* What the dashboard should raise: last month with no sheet at all, or a sheet
+   with holes in the days that have already happened. */
+function tsDue(){
+  if(!S.timesheets.length&&!S.employees.length)return null;
+  const now=today(),cur=now.slice(0,7),prev=addMonths(now.slice(0,8)+'01',-1).slice(0,7);
+  const sheet=m=>S.timesheets.find(x=>x.month===m);
+  const prevSheet=sheet(prev);
+  if(!prevSheet&&S.employees.length)return {kind:'missing',month:prev};
+  if(prevSheet){
+    const g=tsGaps(prevSheet,'');           /* a finished month counts in full */
+    if(g.length)return {kind:'gaps',id:prevSheet.id,month:prev,n:g.length};
+  }
+  const curSheet=sheet(cur);
+  if(curSheet){
+    const g=tsGaps(curSheet,now);
+    if(g.length)return {kind:'gaps',id:curSheet.id,month:cur,n:g.length};
+  }
+  return null;
+}
 /* "8" -> 8 hours worked · "A" -> a code, no hours · "DP 8" / "8 DP" -> both */
 function tsParse(v){
   const x=String(v==null?'':v).trim();
@@ -4562,6 +4688,10 @@ function employeesModal(){
 <script>
 /* ---------- žiniaraščių sąrašas ---------- */
 let tsFilter={q:''};
+let tsBrush=null;       /* the value being painted, '' erases, null = off */
+let tsPainting=false;
+let tsGapIx=0;          /* where the "find the next hole" walk has got to */
+document.addEventListener('pointerup',()=>{tsPainting=false;});
 /* hours read better without trailing zeros: 168, 167,5 */
 const tsH=n=>{
   const x=r2(num(n));
@@ -4623,7 +4753,7 @@ function tsSummaryHtml(tot){
   </tbody></table></div>`;
 }
 function tsExpected(ts){
-  return r2((ts.rows||[]).reduce((a,r)=>a+tsNorm(ts.month,r.hours).hours,0));
+  return r2((ts.rows||[]).reduce((a,r)=>a+tsRowNorm(r,ts.month).hours,0));
 }
 function paintTsTotals(){
   if(!TS)return;
@@ -4632,8 +4762,16 @@ function paintTsTotals(){
     const tt=tsRowTotals(r,TS.month);
     const d=$('#tsD'+i),h=$('#tsH'+i);
     if(d)d.textContent=tt.days||'';
-    if(h)h.textContent=tt.hours?tsH(tt.hours):'';
+    if(h){
+      h.textContent=tt.hours?tsH(tt.hours):'';
+      h.className='tot t-hours '+tsRowClass(r,tt);
+    }
   });
+  const gaps=tsGaps(TS),gb=$('#tsGapBtn');
+  if(gb){
+    gb.className='pill '+(gaps.length?'gapbtn':'okpill');
+    gb.textContent=gaps.length?t('tsMissing')+' '+gaps.length:'✓ '+t('tsMissingNone');
+  }
   tsDays(TS.month).forEach(x=>{
     const el=$('#tsC'+x.d);
     if(el)el.textContent=tot.per[x.d]?tsH(tot.per[x.d]):'';
@@ -4651,8 +4789,8 @@ function paintTsTotals(){
 }
 function tsGridHtml(){
   const days=tsDays(TS.month),tot=tsTotals(TS);
-  const head=days.map(x=>`<th class="d ${x.holiday?'hol':(x.weekend?'wknd':'')}"
-      title="${esc(x.iso+(x.holiday?' · '+x.holiday:x.weekend?' · '+t('tsWeekend'):'')+(x.short?' · '+t('tsShort'):''))}">
+  const head=days.map(x=>`<th class="d ${x.holiday?'hol':(x.weekend?'wknd':'')}" data-day="${x.d}"
+      title="${esc(x.iso+(x.holiday?' · '+x.holiday:x.weekend?' · '+t('tsWeekend'):'')+(x.short?' · '+t('tsShort'):'')+' · '+t('tsStampCol'))}">
       ${x.d}<i>${esc(tsDowLabel(x.dow))}</i></th>`).join('');
   return `<table class="tsg"><colgroup>
     <col class="nr"><col class="nm"><col class="ps">
@@ -4672,11 +4810,17 @@ function tsGridHtml(){
         <td class="stick c-nr">${i+1}</td>
         <td class="stick c-name" title="${esc(r.name||'')}"><div class="cw">${esc(r.name||'—')}</div></td>
         <td class="stick c-pos" title="${esc(r.position||'')}"><div class="cw">${esc(r.position||'')}</div></td>
-        ${days.map(x=>`<td class="d ${x.holiday?'hol':(x.weekend?'wknd':'')}">
+        ${days.map(x=>{
+          const on=tsRowOn(r,x.iso),v=(r.days||{})[x.d]||'';
+          const cls=[x.holiday?'hol':(x.weekend?'wknd':''),
+                     on?'':'off',
+                     tsIsGap(r,x,String(v))?'gap':''].filter(Boolean).join(' ');
+          return `<td class="d ${cls}">
           <input data-r="${i}" data-d="${x.d}" maxlength="6" autocomplete="off"
-                 value="${esc((r.days||{})[x.d]||'')}"></td>`).join('')}
+                 value="${esc(v)}"></td>`;}).join('')}
         <td class="tot t-days" id="tsD${i}">${tt.days||''}</td>
-        <td class="tot t-hours" id="tsH${i}">${tt.hours?tsH(tt.hours):''}</td>
+        <td class="tot t-hours ${tsRowClass(r,tt)}" id="tsH${i}"
+            title="${esc(t('tsNormHours')+' '+tsH(tsRowNorm(r,TS.month).hours))}">${tt.hours?tsH(tt.hours):''}</td>
         <td class="tot t-menu"><button class="btn sm" data-rowmenu="${i}" title="${esc(t('tsFillRow'))}">⋯</button></td>
       </tr>`;}).join('')}
   </tbody>
@@ -4690,6 +4834,20 @@ function tsGridHtml(){
     <td class="tot t-menu"></td>
   </tr></tfoot></table>`;
 }
+/* One definition of a hole, used by the counter and by the stripes alike. */
+function tsIsGap(row,day,value){
+  if(!day||!day.work)return false;
+  if(!tsRowOn(row,day.iso))return false;
+  if(day.iso>today())return false;
+  return !String(value==null?'':value).trim();
+}
+/* red when short of this person's own norm, amber when over it */
+function tsRowClass(row,tt){
+  const n=tsRowNorm(row,TS.month).hours;
+  if(!n&&!tt.hours)return '';
+  if(Math.abs(tt.hours-n)<0.005)return 'ok';
+  return tt.hours<n?'low':'high';
+}
 function tsFocus(r,d){
   const el=document.querySelector(`.tsg input[data-r="${r}"][data-d="${d}"]`);
   if(el){el.focus();el.select();}
@@ -4700,15 +4858,27 @@ function tsFillRow(i,overwrite){
   row.days=row.days||{};
   const h=num(row.hours)||num(S.settings.tsHours)||8;
   tsDays(TS.month).forEach(x=>{
-    if(!x.work)return;
+    if(!x.work||!tsRowOn(row,x.iso))return;
     if(!overwrite&&String(row.days[x.d]||'').trim())return;
     row.days[x.d]=tsH(h-(x.short?1:0));
   });
+}
+/* The values worth one click: the standard shift, half of it, then the codes
+   a month actually tends to need. */
+function tsBrushes(){
+  const h=num(S.settings.tsHours)||8;
+  const out=[{v:'*',label:'●',title:t('tsBrushNorm')},
+             {v:tsH(h),label:tsH(h),title:t('tsFD')},
+             {v:tsH(h/2),label:tsH(h/2),title:t('tsFD')}];
+  ['A','L','NA','DP','K','PB'].forEach(c=>out.push({v:c,label:c,title:tsLabel(c)}));
+  out.push({v:'',label:'✕',title:t('tsErase')});
+  return out;
 }
 function renderSheet(){
   if(!TS){go('sheets');return;}
   const norm=tsNorm(TS.month,S.settings.tsHours),tot=tsTotals(TS);
   const exp=tsExpected(TS),df=r2(tot.hours-exp);
+  const gaps=tsGaps(TS);
   $('#p-sheet').innerHTML=`
   <div class="btnrow" style="margin-bottom:12px">
     <button class="btn sm" id="tsBack">${esc(t('tsBack'))}</button>
@@ -4746,13 +4916,21 @@ function renderSheet(){
 
   <div class="card" style="margin-top:14px"><div class="head">
     <b>${esc(t('tsTitle'))}</b>
+    ${TS.rows.length?`<button class="pill ${gaps.length?'gapbtn':'okpill'}" id="tsGapBtn"
+       title="${esc(t('tsFindMissing'))}">${gaps.length?esc(t('tsMissing'))+' '+gaps.length:'✓ '+esc(t('tsMissingNone'))}</button>`:''}
     <div class="grow"></div>
     <button class="btn sm" id="tsAdd">${esc(t('tsAddRow'))}</button>
     <button class="btn sm" id="tsFill">${esc(t('tsFillWork'))}</button>
   </div>
   ${TS.rows.length?`<div class="body tight">
-      <div class="tsgrid-wrap">${tsGridHtml()}</div>
-      <div class="muted" style="margin-top:8px">${esc(t('tsLegendHint'))}</div>
+      <div class="tsbrush" id="tsBrushBar">
+        <span class="bl">${esc(t('tsBrushLbl'))}</span>
+        ${tsBrushes().map(b=>`<button class="bb ${tsBrush===b.v?'on':''}" data-brush="${esc(b.v)}"
+           title="${esc(b.title)}">${esc(b.label)}</button>`).join('')}
+        <span class="muted bh">${esc(tsBrush===null?t('tsBrushHint'):t('tsBrushOn'))}</span>
+      </div>
+      <div class="tsgrid-wrap${tsBrush===null?'':' painting'}">${tsGridHtml()}</div>
+      <div class="muted" style="margin-top:8px">${esc(t('tsLegendHint'))} · ${esc(t('tsKeysHint'))}</div>
     </div>`
     :`<div class="empty"><div class="big">${esc(t('tsNoRows'))}</div>${esc(t('tsNoRowsSub'))}</div>`}
   </div>
@@ -4799,22 +4977,48 @@ function renderSheet(){
     TS.rows.forEach((r,i)=>tsFillRow(i,false));
     tsCommit();renderSheet();toast(t('tsFilled'));
   };
+  $$('#tsBrushBar [data-brush]').forEach(b=>b.onclick=()=>{
+    const v=b.dataset.brush;
+    tsBrush=(tsBrush===v)?null:v;      /* clicking the active one puts it down */
+    renderSheet();
+  });
+  const gb=$('#tsGapBtn');
+  if(gb)gb.onclick=()=>{
+    const g=tsGaps(TS);
+    if(!g.length){toast(t('tsMissingNone'));return;}
+    if(tsGapIx>=g.length)tsGapIx=0;
+    const hit=g[tsGapIx++];
+    tsFocus(hit.row,hit.day);
+    const inp=document.querySelector(`.tsg input[data-r="${hit.row}"][data-d="${hit.day}"]`);
+    if(inp)inp.scrollIntoView({block:'nearest',inline:'center'});
+    toast(`${hit.name} · ${hit.day} ${monthLabel(TS.month)} — ${tsGapIx}/${g.length}`);
+  };
   bindTsGrid();
 }
+/* Write one cell and keep the totals honest, without re-rendering the grid —
+   a re-render mid-entry would take the cursor with it. */
+function tsStamp(r,d,value){
+  const row=TS.rows[r];
+  if(!row)return;
+  row.days=row.days||{};
+  const v=String(value==null?'':value).trim();
+  if(v)row.days[d]=v;else delete row.days[d];
+  const inp=document.querySelector(`.tsg input[data-r="${r}"][data-d="${d}"]`);
+  if(inp){
+    if(inp.value!==v)inp.value=v;
+    const td=inp.closest('td');
+    if(td)td.classList.toggle('gap',tsIsGap(row,tsDays(TS.month)[d-1],v));
+  }
+  paintTsTotals();
+  tsCommit();
+}
+const tsBrushValue=()=>tsBrush;
 function bindTsGrid(){
   const wrap=$('#p-sheet .tsgrid-wrap');
   if(!wrap)return;
   const days=tsDays(TS.month),last=days.length?days[days.length-1].d:31;
   wrap.querySelectorAll('.tsg input[data-r]').forEach(inp=>{
-    inp.oninput=()=>{
-      const r=+inp.dataset.r,d=+inp.dataset.d,row=TS.rows[r];
-      if(!row)return;
-      row.days=row.days||{};
-      const v=inp.value.trim();
-      if(v)row.days[d]=v;else delete row.days[d];
-      paintTsTotals();
-      tsCommit();
-    };
+    inp.oninput=()=>tsStamp(+inp.dataset.r,+inp.dataset.d,inp.value);
     /* the grid is filled by hand, so it navigates like a spreadsheet */
     inp.onkeydown=e=>{
       const r=+inp.dataset.r,d=+inp.dataset.d;
@@ -4825,22 +5029,84 @@ function bindTsGrid(){
         if(d<last)tsFocus(r,d+1);else if(r<rows-1)tsFocus(r+1,days[0].d);}
       else if(e.key==='ArrowLeft'&&inp.selectionStart===0){e.preventDefault();
         if(d>days[0].d)tsFocus(r,d-1);else if(r>0)tsFocus(r-1,last);}
+      /* the two that save the most typing: copy the day above, and stamp the
+         standard shift on an empty day */
+      else if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='d'){
+        e.preventDefault();
+        if(r>0)tsStamp(r,d,(TS.rows[r-1].days||{})[d]||'');
+      }
+      else if(e.key===' '&&!inp.value){
+        e.preventDefault();
+        const day=days[d-1],h=num(TS.rows[r].hours)||num(S.settings.tsHours)||8;
+        tsStamp(r,d,tsBrush!==null?tsBrushFor(r,d):tsH(h-(day&&day.short?1:0)));
+      }
     };
     inp.onfocus=()=>inp.select();
+  });
+
+  /* Brush painting: pick a value, then drag across the days it applies to.
+     elementFromPoint rather than pointerover, because a captured pointer
+     stops firing over events and touch never fires them at all. */
+  const cellAt=e=>{
+    const el=document.elementFromPoint(e.clientX,e.clientY);
+    const td=el&&el.closest?el.closest('td.d'):null;
+    return td?td.querySelector('input[data-r]'):null;
+  };
+  const paint=inp=>{if(inp){const r=+inp.dataset.r,d=+inp.dataset.d;tsStamp(r,d,tsBrushFor(r,d));}};
+  wrap.onpointerdown=e=>{
+    if(tsBrush===null||e.button)return;
+    const inp=cellAt(e);
+    if(!inp)return;
+    e.preventDefault();          /* painting should not put a caret in the cell */
+    tsPainting=true;paint(inp);
+  };
+  wrap.onpointermove=e=>{if(tsPainting&&tsBrush!==null)paint(cellAt(e));};
+  /* a whole day for everybody: stamp down the column from its header */
+  wrap.querySelectorAll('.tsg thead th[data-day]').forEach(th=>th.onclick=()=>{
+    if(tsBrush===null){toast(t('tsPickBrush'));return;}
+    const d=+th.dataset.day,day=days[d-1];
+    TS.rows.forEach((row,i)=>{
+      if(!tsRowOn(row,day.iso))return;
+      tsStamp(i,d,tsBrushFor(i,d));
+    });
   });
   wrap.querySelectorAll('[data-rowmenu]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.rowmenu,row=TS.rows[i];
     if(!row)return;
+    const rn=tsRowNorm(row,TS.month),rt=tsRowTotals(row,TS.month);
     openModal(row.name||t('tsEmpName'),
-      `<div class="note">${esc(t('tsFillHint'))}</div>
-       <div class="btnrow" style="margin-top:12px;flex-direction:column;align-items:stretch;gap:8px">
+      `<div class="grid2">
+         <label class="f"><span class="l">${esc(t('tsFrom'))}</span>
+           <input type="date" id="tsrFrom" value="${esc(row.from||'')}"></label>
+         <label class="f"><span class="l">${esc(t('tsTo'))}</span>
+           <input type="date" id="tsrTo" value="${esc(row.to||'')}"></label>
+       </div>
+       <div class="note" style="margin-top:10px">${esc(t('tsRangeHint'))}</div>
+       <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px">
+         <div class="kpi"><div class="kl">${esc(t('tsNormHours'))}</div><div class="kv">${tsH(rn.hours)}</div>
+           <div class="ks">${rn.days} ${esc(t('tsWorkDays').toLowerCase())}</div></div>
+         <div class="kpi"><div class="kl">${esc(t('tsWorkedHours'))}</div><div class="kv">${tsH(rt.hours)}</div>
+           <div class="ks">${rt.days} ${esc(t('tsCodeDays').toLowerCase())}</div></div>
+         <div class="kpi"><div class="kl">${esc(t('tsMissing'))}</div>
+           <div class="kv">${tsGaps(TS).filter(g=>g.row===i).length}</div>
+           <div class="ks">${esc(t('tsWorkDays').toLowerCase())}</div></div>
+       </div>
+       <div class="btnrow" style="margin-top:14px;flex-direction:column;align-items:stretch;gap:8px">
          <button class="btn" id="tsrFill">${esc(t('tsFillRow'))}</button>
+         <button class="btn" id="tsrGaps">${esc(t('tsFillGapsRow'))}</button>
          <button class="btn" id="tsrClear">${esc(t('tsClearRow'))}</button>
          <button class="btn" id="tsrDrop">${esc(t('tsRemoveRow'))}</button>
        </div>`,
       `<button class="btn" data-mclose>${esc(t('close'))}</button>`,
       ()=>{
-        $('#tsrFill').onclick=()=>{tsFillRow(i,true);tsCommit();closeModal();renderSheet();};
+        const keep=()=>{
+          row.from=$('#tsrFrom').value||'';
+          row.to=$('#tsrTo').value||'';
+        };
+        $('#tsrFrom').onchange=()=>{keep();tsCommit();renderSheet();};
+        $('#tsrTo').onchange=()=>{keep();tsCommit();renderSheet();};
+        $('#tsrFill').onclick=()=>{keep();tsFillRow(i,true);tsCommit();closeModal();renderSheet();};
+        $('#tsrGaps').onclick=()=>{keep();tsFillRow(i,false);tsCommit();closeModal();renderSheet();};
         $('#tsrClear').onclick=()=>{row.days={};tsCommit();closeModal();renderSheet();};
         $('#tsrDrop').onclick=()=>{TS.rows.splice(i,1);tsCommit();closeModal();renderSheet();};
       });
@@ -4866,10 +5132,32 @@ function tsExportCsv(ts){
   download(`ziniarastis-${ts.month}${ts.dept?'-'+slug(ts.dept):''}.csv`,
            csvOf(head,rows),'text/csv;charset=utf-8');
 }
-function tsPrint(ts){
+function tsPrintNow(ts){
   const w=window.open('','_blank');
   if(!w){toast(t('popupBlocked'),true);return;}
   w.document.open();w.document.write(sheetHtml(ts));w.document.close();
+}
+/* The sheet is signed and handed to an accountant, so a hole in it is worth
+   one question before it leaves. */
+function tsPrint(ts){
+  const gaps=tsGaps(ts,'');
+  if(!gaps.length){tsPrintNow(ts);return;}
+  const names={};
+  gaps.forEach(g=>{names[g.name||'—']=(names[g.name||'—']||0)+1;});
+  openModal(t('tsMissingTitle'),
+    `<div class="note warn">${esc(t('tsMissingWarn').replace('{n}',gaps.length))}</div>
+     <div class="tblwrap" style="margin-top:12px;max-height:200px;overflow-y:auto">
+       <table><thead><tr><th>${esc(t('tsEmpName'))}</th>
+         <th class="num">${esc(t('tsMissing'))}</th></tr></thead><tbody>
+         ${Object.keys(names).map(n=>`<tr><td>${esc(n)}</td>
+           <td class="num">${names[n]}</td></tr>`).join('')}
+       </tbody></table></div>`,
+    `<button class="btn" id="tsMissGo">${esc(t('tsShowMissing'))}</button>
+     <button class="btn primary" id="tsMissPrint">${esc(t('tsPrintAnyway'))}</button>`,
+    ()=>{
+      $('#tsMissPrint').onclick=()=>{closeModal();tsPrintNow(ts);};
+      $('#tsMissGo').onclick=()=>{closeModal();tsGapIx=0;const b=$('#tsGapBtn');if(b)b.click();};
+    });
 }
 </script>
 <script>
@@ -5589,6 +5877,7 @@ Object.defineProperties(window,{
   Cloud:{get:()=>Cloud,configurable:true},
   WB:   {get:()=>WB,   set:v=>{WB=v}, configurable:true},
   TS:   {get:()=>TS,   set:v=>{TS=v}, configurable:true},
+  tsBrush:{get:()=>tsBrush,set:v=>{tsBrush=v},configurable:true},
   STATE_V:{get:()=>STATE_V,configurable:true},
   CLOUD_SQL:{get:()=>CLOUD_SQL,configurable:true}
 });
@@ -5600,7 +5889,9 @@ Object.assign(window,{t,esc,num,r2,uid,deacc,normQ,money,today,cur,lineNet,eurSt
                       normaliseImported,makeZip,monthLabel,invTable,viewFromHash,go,
                       openModal,closeModal,openInvoice,invStatus,calc,makeNumber,
                       easterSunday,ltHolidays,tsDays,tsNorm,tsParse,tsRowTotals,tsTotals,
+                      tsRowOn,tsRowNorm,tsGaps,tsStamp,tsBrushValue,tsIsGap,tsBrushFor,
                       tsMonthLen,tsBlank,tsRowOf,tsFillRow,tsExpected,sheetHtml,tsH,
+                      tsPrintNow,tsDue,
                       TS_CODES,tsLabel,tsWorks});
 Object.defineProperty(window,'EXP',{get:()=>EXP,set:v=>{EXP=v},configurable:true});
 

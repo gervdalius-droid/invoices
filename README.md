@@ -232,11 +232,36 @@ A code this app has never heard of is kept and counted under its own name rather
 than dropped, so the eighteen listed codes are a convenience, not a limit.
 
 The grid is built for typing: arrow keys and Enter step between cells the way a
-spreadsheet does, the name column is frozen on the left and the two totals on the
-right, and only the totals repaint as you type — the inputs are never re-rendered
-underneath you. **Užpildyti darbo dienas** fills every working day at each
-employee's own daily hours and touches nothing already written; the ⋯ menu on a
-row can overwrite it, clear it, or drop the employee from the sheet.
+spreadsheet does, **Space** stamps the standard shift into an empty day, **Ctrl+D**
+copies the day above, the name column is frozen on the left and the two totals on
+the right, and only the totals repaint as you type — the inputs are never
+re-rendered underneath you.
+
+Most of a month goes in without typing at all. Pick a value from the stamp
+palette — **●** (each employee's own shift for that day, an hour shorter before a
+holiday), the standard hours, half of them, or `A` `L` `NA` `DP` `K` `PB` — then
+**drag across the cells** it applies to, or click a **day heading** to fill that
+day for everybody. **Užpildyti darbo dienas** fills every working day at once and
+touches nothing already written; the ⋯ menu on a row can overwrite it, fill only
+its holes, clear it, or drop the employee.
+
+### Nothing quietly left out
+
+A working day with nothing written against it is a hole, and the sheet says so
+rather than waiting for the accountant to ask. Those cells are hatched in red, the
+grid header carries a **Trūksta N** counter that walks you to the next one, and
+each row's hours turn red when they fall short of *that person's* norm. An absence
+code counts as filled — the hole is a day nobody accounted for at all. Days still
+ahead of today are not holes, so filling September on the 11th does not report the
+rest of the month.
+
+Printing a sheet with holes in it asks first, and lists who they belong to. The
+dashboard raises it too: last month with no sheet at all, or a sheet with days
+still unaccounted for, with a button that opens it.
+
+Somebody hired or let go mid-month is not a hole either — give the row a **Dirba
+nuo / iki** in its ⋯ menu and the days outside it stop counting, in the norm as
+well as in the holes.
 
 Weekends and public holidays are shaded and left out of the fill. The holidays
 are computed, not tabulated — four of them move with Easter (Meeus/Jones/Butcher),
@@ -314,7 +339,7 @@ of querying them live from the browser.
 
 ```bash
 python3 serve.py &
-open http://localhost:8741/test.html        # 500 in-browser assertions
+open http://localhost:8741/test.html        # 541 in-browser assertions
 python3 tools/e2e/e2e.py                    # headless Chrome, real registry
 ```
 

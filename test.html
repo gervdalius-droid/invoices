@@ -689,6 +689,102 @@ function tests(W,D){
   eq('and expects half the month', W.tsExpected(fillSheet), 166+82);
   W.TS=realTS;
 
+  grp('darbo laiko žiniaraštis — nothing missed');
+  const gapSheet=W.tsBlank('2026-09');
+  gapSheet.rows=[{empId:'a',name:'Visas',hours:8,days:{}},
+                 {empId:'b',name:'Pusė',hours:4,days:{}}];
+  /* a finished month is judged whole: 22 working days each */
+  eq('an empty September is all holes', W.tsGaps(gapSheet,'').length, 44);
+  gapSheet.rows[0].days[1]='8';
+  eq('a filled cell is not a hole', W.tsGaps(gapSheet,'').length, 43);
+  gapSheet.rows[0].days[2]='A';
+  eq('an absence code counts as filled too', W.tsGaps(gapSheet,'').length, 42);
+  gapSheet.rows[0].days[3]='   ';
+  eq('but whitespace does not', W.tsGaps(gapSheet,'').length, 42);
+  /* days still ahead are not holes yet */
+  eq('mid-month only counts what has happened',
+     W.tsGaps(gapSheet,'2026-09-04').length, 6);
+  eq('a weekend is never a hole',
+     W.tsGaps(gapSheet,'2026-09-06').length, W.tsGaps(gapSheet,'2026-09-04').length);
+  eq('the hole knows whose it is', W.tsGaps(gapSheet,'2026-09-04')[0].name, 'Visas');
+  eq('and which day', W.tsGaps(gapSheet,'2026-09-04')[0].day, 3);
+
+  /* somebody hired on the 15th owes nothing for the 1st */
+  ok('inside the range', W.tsRowOn({from:'2026-09-15'},'2026-09-20'));
+  ok('before it', !W.tsRowOn({from:'2026-09-15'},'2026-09-01'));
+  ok('after leaving', !W.tsRowOn({to:'2026-09-10'},'2026-09-20'));
+  ok('no range means always', W.tsRowOn({},'2026-09-01') && W.tsRowOn(null,'2026-09-01'));
+  gapSheet.rows[1].from='2026-09-15';
+  eq('a mid-month joiner is not short for the days before',
+     W.tsGaps(gapSheet,'').length, 42-10);
+  eq('and their norm is only the days they were here',
+     W.tsRowNorm(gapSheet.rows[1],'2026-09').days, 12);
+  eq('in their own hours', W.tsRowNorm(gapSheet.rows[1],'2026-09').hours, 48);
+  eq('the sheet expects the sum of the two', W.tsExpected(gapSheet), 176+48);
+  const realTS2=W.TS;W.TS=gapSheet;
+  W.tsFillRow(1,true);
+  eq('filling stops at the start date', gapSheet.rows[1].days[1], undefined);
+  eq('and starts on it', gapSheet.rows[1].days[15], '4');
+  eq('a joiner ends up with no holes', W.tsGaps(gapSheet,'').filter(g=>g.row===1).length, 0);
+
+  grp('darbo laiko žiniaraštis — stamping');
+  W.S.settings.tsHours=8;
+  /* a month already gone by, or nothing would read as a hole */
+  const janDays=W.tsDays('2026-01');
+  eq('a full day is a hole when empty', W.tsIsGap({},janDays[14],''), true);
+  eq('a filled one is not', W.tsIsGap({},janDays[14],'8'), false);
+  eq('a weekend is not', W.tsIsGap({},janDays[2],''), false);
+  eq('a holiday is not', W.tsIsGap({},janDays[0],''), false);
+  eq('nor a day before somebody started',
+     W.tsIsGap({from:'2026-01-20'},janDays[14],''), false);
+  eq('a day still ahead of us is not a hole yet',
+     W.tsIsGap({},W.tsDays(W.addMonths(W.today(),2).slice(0,7))[14],''), false);
+  /* the norm stamp writes each employee's own shift, not a shared number */
+  const stampSheet=W.tsBlank('2026-12');
+  stampSheet.rows=[{empId:'a',name:'Visas',hours:8,days:{}},
+                   {empId:'b',name:'Pusė',hours:4,days:{}}];
+  W.TS=stampSheet;
+  const brushWas=W.tsBrush;
+  W.tsBrush='*';                       /* the per-employee shift stamp */
+  eq('the getter agrees with the setter', W.tsBrushValue(), '*');
+  W.tsStamp(0,15,W.tsBrushFor(0,15));
+  W.tsStamp(1,15,W.tsBrushFor(1,15));
+  eq('full-timer gets a full shift', stampSheet.rows[0].days[15], '8');
+  eq('half-timer gets half', stampSheet.rows[1].days[15], '4');
+  W.tsStamp(0,23,W.tsBrushFor(0,23));
+  eq('the day before a holiday is an hour shorter', stampSheet.rows[0].days[23], '7');
+  eq('a weekend takes nothing', W.tsBrushFor(0,5), '');
+  W.tsStamp(0,15,'');
+  eq('an empty stamp clears the cell', stampSheet.rows[0].days[15], undefined);
+  W.tsBrush='A';
+  eq('a code stamp is the same for everyone', W.tsBrushFor(0,15), 'A');
+  eq('even on a weekend', W.tsBrushFor(0,5), 'A');
+  W.tsBrush=brushWas;W.TS=realTS2;
+
+  grp('darbo laiko žiniaraštis — the reminder');
+  const nowM=W.today().slice(0,7);
+  const prevM=W.addMonths(W.today().slice(0,8)+'01',-1).slice(0,7);
+  W.S.timesheets=[];W.S.employees=[{id:'z',name:'Kažkas',hours:8,active:true}];
+  eq('last month with no sheet is raised', W.tsDue().kind, 'missing');
+  eq('and it names the month', W.tsDue().month, prevM);
+  const done=W.tsBlank(prevM);
+  done.rows=[{empId:'z',name:'Kažkas',hours:8,days:{}}];
+  W.S.timesheets=[done];
+  eq('an empty sheet for it is raised as holes', W.tsDue().kind, 'gaps');
+  ok('and counts them', W.tsDue().n>0);
+  const realTS3=W.TS;W.TS=done;W.tsFillRow(0,true);W.TS=realTS3;
+  eq('a finished sheet raises nothing', W.tsDue(), null);
+  /* the current month is judged only up to today, not to its end */
+  const thisOne=W.tsBlank(nowM);
+  thisOne.rows=[{empId:'z',name:'Kažkas',hours:8,days:{}}];
+  W.S.timesheets=[done,thisOne];
+  const nag=W.tsDue();
+  ok('an unfilled current month is raised', nag && nag.kind==='gaps' && nag.month===nowM);
+  W.TS=thisOne;W.tsFillRow(0,true);W.TS=realTS3;
+  eq('filling it clears the reminder', W.tsDue(), null);
+  W.S.timesheets=[];W.S.employees=[];
+  eq('a book with no employees is never nagged', W.tsDue(), null);
+
   grp('darbo laiko žiniaraštis — the printed form');
   const pr=W.sheetHtml(fillSheet);
   ok('the form is titled', pr.indexOf('DARBO LAIKO')>=0 || pr.indexOf(W.t('tsTitle'))>=0);
