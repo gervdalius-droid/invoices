@@ -966,7 +966,7 @@ function tests(W,D){
 function rest2(W,D){
   /* ---------------------------------------------------------------- */
   grp('export everything (ZIP)');
-  return zipTests(W).then(()=>xlsxTests(W)).then(()=>{
+  return zipTests(W).then(()=>xlsxTests(W)).then(()=>authTests(W)).then(()=>{
 
   /* ---------------------------------------------------------------- */
   grp('registry');
@@ -1172,6 +1172,149 @@ async function xlsxTests(W){
   eq('an Excel serial', W.toIso('46023'), '2026-01-01');
   eq('nonsense is left alone', W.toIso('rytoj'), 'rytoj');
   W.S.invoices=[];W.S.customers=[];
+}
+
+/* The session handling that "Invalid Refresh Token: Already Used" came out of.
+   Everything here runs against a stubbed fetch — no network. */
+async function authTests(W){
+  grp('cloud session');
+  const realFetch=W.fetch;
+  const LOCK='inv_cloud_lock';
+  let calls=[],reply=null;
+  W.fetch=async(url,opts)=>{
+    calls.push({url:String(url),body:opts&&opts.body?JSON.parse(opts.body):null});
+    const r=reply;
+    return {ok:r.ok,status:r.status,json:async()=>r.body,text:async()=>JSON.stringify(r.body)};
+  };
+  const cfg=(over)=>Object.assign({url:'https://x.supabase.co',key:'k',email:'a@b.c',
+    workspace:'ws',table:'workspaces',token:'old',refresh:'r1',exp:Date.now()+3600000},over||{});
+  const clean=()=>{try{W.localStorage.removeItem(LOCK);}catch(e){}};
+
+  /* a live token is simply used */
+  W.Cloud.cfg=cfg();calls=[];
+  eq('a fresh token is reused', await W.Cloud.token(), 'old');
+  eq('with no request', calls.length, 0);
+
+  /* an expired one is refreshed, and the rotation is kept */
+  W.Cloud.cfg=cfg({exp:Date.now()-1});clean();
+  reply={ok:true,status:200,body:{access_token:'new',refresh_token:'r2',expires_in:3600}};
+  calls=[];
+  eq('an expired token refreshes', await W.Cloud.token(), 'new');
+  eq('one request went out', calls.length, 1);
+  ok('to the token endpoint', calls[0].url.indexOf('grant_type=refresh_token')>=0);
+  eq('it spent the stored refresh token', calls[0].body.refresh_token, 'r1');
+  eq('the rotated token is kept', W.Cloud.cfg.refresh, 'r2');
+  ok('and written to disk',
+     JSON.parse(W.localStorage.getItem(W.Cloud.CFG)||'{}').refresh==='r2');
+  eq('the lock is released', W.localStorage.getItem(LOCK), null);
+
+  /* two calls at once must not spend the token twice — this is the bug */
+  W.Cloud.cfg=cfg({exp:Date.now()-1,refresh:'r2'});clean();
+  /* the previous refresh left a live token on disk — this test is about the
+     case where there is nothing to fall back on */
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(W.Cloud.cfg));
+  reply={ok:true,status:200,body:{access_token:'n2',refresh_token:'r3',expires_in:3600}};
+  calls=[];
+  const both=await Promise.all([W.Cloud.token(),W.Cloud.token(),W.Cloud.token()]);
+  eq('three callers, one refresh', calls.length, 1);
+  eq('all three get the same token', both.join(','), 'n2,n2,n2');
+
+  /* another tab rotated it already: use what is on disk, do not refresh */
+  W.Cloud.cfg=cfg({exp:Date.now()-1,refresh:'stale',token:'stale'});clean();
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(cfg({token:'fromOtherTab',refresh:'r9'})));
+  calls=[];
+  eq('the other tab\'s token is adopted', await W.Cloud.token(), 'fromOtherTab');
+  eq('without spending ours', calls.length, 0);
+
+  /* a used refresh token is not an error to sit in — it needs a password */
+  W.Cloud.cfg=cfg({exp:Date.now()-1});clean();
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(W.Cloud.cfg));
+  reply={ok:false,status:400,body:{error:'invalid_grant',
+         error_description:'Invalid Refresh Token: Already Used'}};
+  W.Cloud.poll=setInterval(()=>{},60000);
+  let threw='';
+  try{await W.Cloud.token();}catch(e){threw=String(e.message||e);}
+  ok('the caller is told', threw.length>0);
+  eq('the session asks for a password', W.Cloud.status, 'auth');
+  ok('the dead token is thrown away',
+     !W.Cloud.cfg.refresh && !W.Cloud.cfg.token);
+  ok('and the dead token is off disk too',
+     !JSON.parse(W.localStorage.getItem(W.Cloud.CFG)||'{}').refresh);
+  eq('the connection itself is kept', W.Cloud.cfg.workspace, 'ws');
+  eq('so the panel can ask for one thing', W.Cloud.linked(), true);
+  eq('but syncing is off', W.Cloud.on(), false);
+  eq('the poll was stopped', W.Cloud.poll, null);
+  eq('the error message is kept for the user',
+     W.Cloud.msg.indexOf('Already Used')>=0, true);
+
+  /* and it stops trying with a token it knows is dead */
+  calls=[];
+  await W.Cloud.sync();
+  eq('sync does nothing while the session is out', calls.length, 0);
+  eq('and does not overwrite the reason', W.Cloud.status, 'auth');
+
+  /* the password brings it back without retyping the connection */
+  reply={ok:true,status:200,body:{access_token:'t9',refresh_token:'r10',expires_in:3600}};
+  calls=[];
+  const startWas=W.Cloud.start;let started=0;W.Cloud.start=()=>{started++;};
+  await W.Cloud.reauth('hunter2');
+  W.Cloud.start=startWas;
+  ok('it signed in with a password', calls[0].url.indexOf('grant_type=password')>=0);
+  eq('using the stored address', calls[0].body.email, 'a@b.c');
+  eq('syncing is on again', W.Cloud.on(), true);
+  eq('with the new session', W.Cloud.cfg.refresh, 'r10');
+  eq('and it resumed', started, 1);
+
+  /* a tab that signs in hands the session to the other one */
+  W.Cloud.cfg=cfg({token:null,refresh:null,exp:0});W.Cloud.status='auth';
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(cfg({token:'shared',refresh:'rS'})));
+  const startWas2=W.Cloud.start;let started2=0;W.Cloud.start=()=>{started2++;};
+  W.Cloud.adoptStored();
+  W.Cloud.start=startWas2;
+  eq('the other tab\'s session is picked up', W.Cloud.status, 'idle');
+  eq('and syncing resumes', started2, 1);
+
+  /* a non-auth failure stays a plain error, recoverable on its own */
+  W.Cloud.cfg=cfg({exp:Date.now()-1});clean();
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(W.Cloud.cfg));
+  W.Cloud.status='idle';
+  reply={ok:false,status:503,body:{msg:'upstream down'}};
+  threw='';
+  try{await W.Cloud.token();}catch(e){threw=String(e.message||e);}
+  ok('a server wobble is reported', threw.indexOf('upstream down')>=0);
+  ok('but the session is kept', W.Cloud.status!=='auth' && !!W.Cloud.cfg.refresh);
+
+  /* unsent local work must survive a lapsed session and the sign-in after it */
+  W.Cloud.cfg=cfg();W.Cloud.status='idle';W.Cloud.seen='T7';W.Cloud.dirty=false;
+  W.Cloud.mark();
+  ok('a local edit marks the device as ahead', W.Cloud.dirty===true);
+  ok('and that is written down',
+     JSON.parse(W.localStorage.getItem(W.Cloud.CFG)||'{}').dirty===true);
+  eq('along with where we last were',
+     JSON.parse(W.localStorage.getItem(W.Cloud.CFG)||'{}').seen, 'T7');
+  W.Cloud.seen=null;W.Cloud.dirty=false;
+  W.Cloud.load();
+  eq('a reload remembers the position', W.Cloud.seen, 'T7');
+  eq('and that there is unsent work', W.Cloud.dirty, true);
+  /* editing while the session is out still records it */
+  W.Cloud.cfg=cfg({token:null,refresh:null});W.Cloud.dirty=false;W.Cloud.status='auth';
+  W.Cloud.mark();
+  eq('an edit with no session is still recorded', W.Cloud.dirty, true);
+  eq('but nothing is scheduled', W.Cloud.on(), false);
+  /* and signing back in asks rather than overwriting */
+  W.Cloud.cfg=cfg();W.Cloud.status='idle';W.Cloud.seen=null;W.Cloud.dirty=true;
+  let asked=0;const modalWas=W.conflictModal;W.conflictModal=()=>{asked++;};
+  const restWas=W.Cloud.rest;
+  W.Cloud.rest=async()=>[{id:'ws',data:{},updated_at:'T9',updated_by:'other'}];
+  await W.Cloud.sync();
+  W.Cloud.rest=restWas;W.conflictModal=modalWas;
+  eq('an unknown remote plus unsent work is a question', asked, 1);
+  eq('and the sync stops there', W.Cloud.status, 'conflict');
+
+  W.fetch=realFetch;clean();
+  try{W.localStorage.removeItem(W.Cloud.CFG);}catch(e){}
+  W.Cloud.cfg=null;W.Cloud.status='off';W.Cloud.msg='';
+  clearInterval(W.Cloud.poll);W.Cloud.poll=null;
 }
 
 async function zipTests(W){

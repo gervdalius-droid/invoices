@@ -41,11 +41,12 @@
   #cloudChip.idle{border-color:#1f5c33;background:#16341f;color:#8ee0a6}
   #cloudChip.syncing{border-color:#2c4380;background:#1b2a52;color:#a8bcf5}
   #cloudChip.error,#cloudChip.conflict{border-color:#5c2020;background:#3a1618;color:#f5a3a3}
-  #cloudChip.offline{border-color:#5c4a20;background:#3a2f16;color:#f0cf8e}
+  #cloudChip.offline,#cloudChip.auth{border-color:#5c4a20;background:#3a2f16;color:#f0cf8e}
   .cloud-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--line2);flex:none}
   .dot.idle{background:var(--good)}.dot.syncing{background:var(--acc)}
   .dot.error,.dot.conflict{background:var(--bad)}.dot.offline{background:var(--warn)}
+  .dot.auth{background:var(--warn)}
   .lang{display:inline-flex;border:1px solid #2c3340;border-radius:6px;overflow:hidden}
   .lang button{border:0;border-radius:0;padding:5px 9px}
   .lang button.on{background:var(--acc);color:#fff;font-weight:650}
@@ -551,6 +552,11 @@ const I18N={
   cloudSchemaHint:"Paleiskite vieną kartą: Supabase → SQL Editor → įklijuoti → Run. Tada Authentication → Users → pridėkite naudotoją.",
   cloudNeedAll:"Užpildykite visus laukus",
   cloudConnected:"Prisijungta prie debesies",
+  cloudAuth:"Reikia prisijungti iš naujo",
+  cloudAuthNeeded:"Baigėsi prisijungimo sesija — įveskite slaptažodį",
+  cloudAuthWhy:"Debesio sesija nebegalioja. Duomenys saugūs šiame įrenginyje — tereikia vėl įvesti slaptažodį.",
+  cloudAuthSafe:"Nieko neprarasta: vietiniai įrašai išliko ir bus išsiųsti į debesį prisijungus.",
+  cloudReauth:"Prisijungti",cloudNeedPass:"Įveskite slaptažodį",
   cloudOff:"Debesis išjungtas",cloudSynced:"Sinchronizuota",cloudSyncing:"Sinchronizuojama…",
   cloudError:"Debesio klaida",cloudConflict:"Skirtingos versijos",cloudOffline:"Neprisijungęs",
   cloudSyncNow:"Sinchronizuoti dabar",cloudPull:"Paimti iš debesies",cloudDisconnect:"Atjungti",
@@ -832,6 +838,11 @@ const I18N={
   cloudSchemaHint:"Run once: Supabase → SQL Editor → paste → Run. Then Authentication → Users → add a user.",
   cloudNeedAll:"Fill in every field",
   cloudConnected:"Connected to the cloud",
+  cloudAuth:"Sign in again",
+  cloudAuthNeeded:"The session has expired — enter the password",
+  cloudAuthWhy:"The cloud session is no longer valid. Your data is safe on this device — it only needs the password again.",
+  cloudAuthSafe:"Nothing is lost: the local records are intact and go up as soon as you are back in.",
+  cloudReauth:"Sign in",cloudNeedPass:"Enter the password",
   cloudOff:"Cloud off",cloudSynced:"Synced",cloudSyncing:"Syncing…",
   cloudError:"Cloud error",cloudConflict:"Versions differ",cloudOffline:"Offline",
   cloudSyncNow:"Sync now",cloudPull:"Pull from cloud",cloudDisconnect:"Disconnect",
@@ -1136,10 +1147,30 @@ const Cloud={
             workspace:c.workspace||'default',table:c.table||'invoice_workspaces'};
   },
   preset(){return !!(window.CLOUD_CONFIG&&window.CLOUD_CONFIG.url);},
-  load(){try{this.cfg=JSON.parse(localStorage.getItem(this.CFG)||'null');}catch(e){this.cfg=null;}
-         if(this.cfg)this.status='idle';return this.cfg;},
+  load(){
+    this.cfg=this.stored();
+    if(this.cfg){
+      this.status=this.cfg.refresh?'idle':'auth';
+      /* which remote version we last held, and whether this device is ahead of
+         it, have to survive a reload — otherwise a sign-in after a lapsed
+         session looks like a fresh device and the cloud overwrites local work */
+      this.seen=this.cfg.seen||null;
+      this.dirty=!!this.cfg.dirty;
+    }
+    return this.cfg;
+  },
+  /* remember where we stand, without a full save() of the token fields */
+  keep(){
+    if(!this.cfg)return;
+    this.cfg.seen=this.seen||null;
+    this.cfg.dirty=!!this.dirty;
+    try{localStorage.setItem(this.CFG,JSON.stringify(this.cfg));}catch(e){}
+  },
+  stored(){try{return JSON.parse(localStorage.getItem(this.CFG)||'null');}catch(e){return null;}},
   save(c){this.cfg=c;try{localStorage.setItem(this.CFG,JSON.stringify(c));}catch(e){}},
   on(){return !!(this.cfg&&this.cfg.url&&this.cfg.key&&this.cfg.workspace&&this.cfg.refresh);},
+  /* configured, but the session needs a password again */
+  linked(){return !!(this.cfg&&this.cfg.url&&this.cfg.key&&this.cfg.workspace);},
   base(){return String(this.cfg.url||'').replace(/\/+$/,'');},
 
   /* ---- auth ---- */
@@ -1156,18 +1187,88 @@ const Cloud={
     this.status='idle';this.msg='';
     return true;
   },
+  fresh(){return !!(this.cfg&&this.cfg.token&&Date.now()<(this.cfg.exp||0)-60000);},
+
+  /* Supabase rotates the refresh token on every use and rejects the old one
+     ("Invalid Refresh Token: Already Used"). Two tabs of this app share one
+     localStorage, so the second tab to refresh was killing the session — and
+     since only tokens are kept, never the password, it stayed dead.
+     So: always look at what is on disk before refreshing, hold a short
+     cross-tab lock while doing it, and never run two refreshes at once. */
   async token(){
     if(!this.cfg)throw new Error('not configured');
-    if(this.cfg.token&&Date.now()<this.cfg.exp-60000)return this.cfg.token;
-    const r=await fetch(this.base()+'/auth/v1/token?grant_type=refresh_token',{
-      method:'POST',headers:{'apikey':this.cfg.key,'Content-Type':'application/json'},
-      body:JSON.stringify({refresh_token:this.cfg.refresh})});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(j.error_description||j.msg||('HTTP '+r.status));
-    this.cfg.token=j.access_token;this.cfg.refresh=j.refresh_token||this.cfg.refresh;
-    this.cfg.exp=Date.now()+(j.expires_in||3600)*1000;
-    this.save(this.cfg);
-    return this.cfg.token;
+    if(this.fresh())return this.cfg.token;
+    const disk=this.stored();
+    if(disk&&disk.refresh){this.cfg=disk;if(this.fresh())return this.cfg.token;}
+    if(!this.cfg.refresh)throw this.needAuth('no session');
+    if(!this._pending)this._pending=this.refresh().finally(()=>{this._pending=null;});
+    return this._pending;
+  },
+  async refresh(){
+    const lock=this.CFG+'_lock';
+    let held=0;try{held=+(localStorage.getItem(lock)||0);}catch(e){}
+    if(Date.now()-held<8000){
+      /* another tab is mid-refresh: wait for it to publish, rather than
+         spending our refresh token on a request that will be rejected */
+      for(let i=0;i<24;i++){
+        await new Promise(r=>setTimeout(r,250));
+        const d=this.stored();
+        if(d&&d.token&&Date.now()<(d.exp||0)-60000){this.cfg=d;return this.cfg.token;}
+        let still=0;try{still=+(localStorage.getItem(lock)||0);}catch(e){}
+        if(still!==held)break;
+      }
+    }
+    try{localStorage.setItem(lock,String(Date.now()));}catch(e){}
+    try{
+      const used=this.cfg.refresh;
+      const r=await fetch(this.base()+'/auth/v1/token?grant_type=refresh_token',{
+        method:'POST',headers:{'apikey':this.cfg.key,'Content-Type':'application/json'},
+        body:JSON.stringify({refresh_token:used})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){
+        /* the answer may have been lost on the way back, leaving the token
+           spent but unrecorded — if disk moved on, somebody else succeeded */
+        const d=this.stored();
+        if(d&&d.refresh&&d.refresh!==used){
+          this.cfg=d;
+          if(this.fresh())return this.cfg.token;
+        }
+        const msg=j.error_description||j.msg||j.error||('HTTP '+r.status);
+        if(r.status===400||r.status===401||/refresh|grant|expired|already used/i.test(msg))
+          throw this.needAuth(msg);
+        throw new Error(msg);
+      }
+      this.cfg.token=j.access_token;
+      this.cfg.refresh=j.refresh_token||this.cfg.refresh;
+      this.cfg.exp=Date.now()+(j.expires_in||3600)*1000;
+      this.save(this.cfg);
+      return this.cfg.token;
+    }finally{
+      try{localStorage.removeItem(lock);}catch(e){}
+    }
+  },
+  /* The session is gone and only a password can bring it back. Everything else
+     about the connection is kept, so that is all the user has to type. */
+  needAuth(msg){
+    if(this.cfg){
+      delete this.cfg.token;delete this.cfg.refresh;delete this.cfg.exp;
+      this.keep();
+    }
+    this.status='auth';this.msg=String(msg||'');
+    clearInterval(this.poll);this.poll=null;
+    clearTimeout(this.timer);
+    paintCloud();
+    return new Error(t('cloudAuthNeeded'));
+  },
+  /* Sign in again with the stored connection and resume where we left off. */
+  async reauth(password){
+    const c=this.cfg||{};
+    const seen=this.seen,dirty=this.dirty;
+    await this.signIn(c.url,c.key,c.email,password,c.workspace,c.table);
+    /* signIn() writes a fresh config; put back what it does not know about */
+    this.seen=seen;this.dirty=dirty;this.keep();
+    this.start();
+    return true;
   },
   signOut(){
     this.cfg=null;this.status='off';this.msg='';this.seen=null;this.dirty=false;
@@ -1200,7 +1301,7 @@ const Cloud={
     const row=await this.fetchRemote();
     if(!row)return null;
     adopt(row.data||{});
-    this.seen=row.updated_at;this.dirty=false;
+    this.seen=row.updated_at;this.dirty=false;this.keep();
     try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
     return row;
   },
@@ -1213,22 +1314,33 @@ const Cloud={
       body:JSON.stringify({id:this.cfg.workspace,data:S,updated_at:now,
                            updated_by:(this.cfg.email||'').split('@')[0]||'device'})
     }).then(rows=>{this.seen=(rows&&rows[0]&&rows[0].updated_at)||now;});
-    this.dirty=false;
+    this.dirty=false;this.keep();
   },
 
   /* Debounced auto-push, called from saveNow(). */
   mark(){
-    if(!this.on())return;
-    this.dirty=true;
-    clearTimeout(this.timer);
-    this.timer=setTimeout(()=>this.sync(),1800);
+    if(!this.linked())return;
+    this.dirty=true;this.keep();
+    /* a lapsed session still records that this device has moved on — that flag
+       is what makes the next sign-in offer a choice instead of overwriting */
+    if(this.on()){
+      clearTimeout(this.timer);
+      this.timer=setTimeout(()=>this.sync(),1800);
+    }
     paintCloud();
   },
   async sync(force){
-    if(!this.on()||this.busy)return;
+    if(!this.on()||this.busy||this.status==='auth')return;
     this.busy=true;this.status='syncing';this.msg='';paintCloud();
     try{
       const row=await this.fetchRemote();
+      /* no idea which remote version we last held, but this device has unsent
+         work: that is exactly the case where guessing loses somebody's day */
+      if(row&&!this.seen&&this.dirty&&!force){
+        this.status='conflict';this.remote=row;this.busy=false;paintCloud();
+        conflictModal(row);
+        return;
+      }
       if(row&&this.seen&&row.updated_at!==this.seen&&this.dirty&&!force){
         /* both sides moved since our last sync — never pick silently */
         this.status='conflict';this.remote=row;this.busy=false;paintCloud();
@@ -1236,7 +1348,7 @@ const Cloud={
         return;
       }
       if(row&&(!this.seen||row.updated_at!==this.seen)&&!this.dirty){
-        adopt(row.data||{});this.seen=row.updated_at;
+        adopt(row.data||{});this.seen=row.updated_at;this.keep();
         try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
         render();
       }else{
@@ -1244,17 +1356,30 @@ const Cloud={
       }
       this.status='idle';
     }catch(e){
-      this.status=navigator.onLine===false?'offline':'error';
-      this.msg=String(e.message||e);
+      if(this.status!=='auth'){
+        this.status=navigator.onLine===false?'offline':'error';
+        this.msg=String(e.message||e);
+      }
     }
     this.busy=false;paintCloud();
   },
   start(){
     if(!this.on())return;
+    this.status='idle';
     this.sync();
     clearInterval(this.poll);
     /* no realtime without the SDK, so look for other devices once a minute */
-    this.poll=setInterval(()=>{if(!this.dirty)this.sync();},60000);
+    this.poll=setInterval(()=>{if(!this.dirty&&this.status!=='auth')this.sync();},60000);
+  },
+  /* Another tab signing in (or refreshing) hands this one a live session back. */
+  adoptStored(){
+    const d=this.stored();
+    if(!d)return;
+    const had=this.cfg&&this.cfg.refresh;
+    this.cfg=d;
+    if(d.refresh&&!had){this.status='idle';this.msg='';this.start();}
+    paintCloud();
+    if(VIEW==='settings')paintCloudPanel();
   }
 };
 
@@ -4097,12 +4222,15 @@ function importModal(){
 /* ===================== cloud UI ===================== */
 function paintCloud(){
   const chip=$('#cloudChip');if(!chip)return;
-  const st=Cloud.on()?(Cloud.dirty&&Cloud.status==='idle'?'syncing':Cloud.status):'off';
+  const st=Cloud.status==='auth'?'auth'
+          :(Cloud.on()?(Cloud.dirty&&Cloud.status==='idle'?'syncing':Cloud.status):'off');
   const label={off:t('cloudOff'),idle:t('cloudSynced'),syncing:t('cloudSyncing'),
-               error:t('cloudError'),conflict:t('cloudConflict'),offline:t('cloudOffline')}[st]||'';
+               error:t('cloudError'),conflict:t('cloudConflict'),offline:t('cloudOffline'),
+               auth:t('cloudAuth')}[st]||'';
   chip.className=st;
   chip.innerHTML='☁ <span class="cl">'+esc(label)+'</span>';
-  chip.title=Cloud.on()?(Cloud.cfg.workspace+' · '+(Cloud.cfg.email||'')+(Cloud.msg?'\n'+Cloud.msg:'')):t('cloudOff');
+  chip.title=st==='auth'?t('cloudAuthWhy')
+    :(Cloud.on()?(Cloud.cfg.workspace+' · '+(Cloud.cfg.email||'')+(Cloud.msg?'\n'+Cloud.msg:'')):t('cloudOff'));
   const panel=$('#cloudPanel');if(panel)paintCloudPanel();
 }
 function cloudChipClick(){
@@ -4113,6 +4241,48 @@ function cloudChipClick(){
 }
 function paintCloudPanel(){
   const box=$('#cloudPanel');if(!box)return;
+  /* The connection is still good — only the session lapsed. Ask for the one
+     thing that is not stored, not for the whole connection again. */
+  if(Cloud.linked()&&!Cloud.on()){
+    const c=Cloud.cfg;
+    box.innerHTML=`
+      <div class="cloud-row">
+        <span class="dot auth"></span>
+        <b>${esc(t('cloudAuth'))}</b>
+        <span class="muted">${esc(c.workspace)} · ${esc(c.email||'')} · <span class="mono">${esc(Cloud.table())}</span></span>
+      </div>
+      <div class="note warn" style="margin-top:10px">${esc(t('cloudAuthWhy'))}${
+        Cloud.msg?` <span class="muted mono">(${esc(Cloud.msg)})</span>`:''}</div>
+      <div class="grid2" style="margin-top:12px">
+        <label class="f"><span class="l">${esc(t('cloudEmail'))}</span>
+          <input id="clAgainEmail" type="email" autocomplete="username" value="${esc(c.email||'')}"></label>
+        <label class="f"><span class="l">${esc(t('cloudPass'))}</span>
+          <input id="clAgainPass" type="password" autocomplete="current-password"></label>
+      </div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn primary" id="clAgain">${esc(t('cloudReauth'))}</button>
+        <button class="btn sm danger" id="clAgainOut">${esc(t('cloudDisconnect'))}</button>
+        <span class="muted" id="clAgainMsg"></span>
+      </div>
+      <div class="note" style="margin-top:10px">${esc(t('cloudAuthSafe'))}</div>`;
+    const go=async()=>{
+      const pass=$('#clAgainPass').value;
+      if(!pass){toast(t('cloudNeedPass'),true);return;}
+      Cloud.cfg.email=$('#clAgainEmail').value.trim()||Cloud.cfg.email;
+      $('#clAgainMsg').textContent=t('cloudSyncing');
+      try{
+        await Cloud.reauth(pass);
+        toast(t('cloudConnected'));
+        paintCloud();renderSettings();
+      }catch(e){
+        $('#clAgainMsg').textContent='✗ '+(e.message||e);
+      }
+    };
+    $('#clAgain').onclick=go;
+    $('#clAgainPass').onkeydown=e=>{if(e.key==='Enter')go();};
+    $('#clAgainOut').onclick=()=>{Cloud.signOut();renderSettings();};
+    return;
+  }
   if(!Cloud.on()){
     const c=Object.assign(Cloud.defaults(),Cloud.cfg||{});
     box.innerHTML=`
@@ -5919,6 +6089,11 @@ function boot(){
   /* If the registry was downloaded before, bring it back silently. */
   REG.loadIfCached().then(ok=>{if(ok&&VIEW==='settings')paintRegPanel();});
   Cloud.load();paintCloud();Cloud.start();
+  /* two tabs share one session: when one of them signs in or rotates the
+     token, the other should pick it up instead of spending a dead one */
+  window.addEventListener('storage',e=>{
+    if(e.key===Cloud.CFG)Cloud.adoptStored();
+  });
   window.addEventListener('online',()=>{if(Cloud.on())Cloud.sync();});
   window.addEventListener('offline',()=>{if(Cloud.on()){Cloud.status='offline';paintCloud();}});
   window.addEventListener('beforeunload',saveNow);

@@ -221,6 +221,32 @@ git-ignored on purpose: the anon key reads nothing on its own (RLS), but there i
 no reason to advertise the account in a public repo — copy the file onto each
 device, or add it to a Pages deploy if you want the hosted app to auto-connect.
 
+### When the session lapses
+
+Supabase rotates the refresh token on every use and rejects the one before it
+(`Invalid Refresh Token: Already Used`). Two tabs of this app share one
+`localStorage`, so the second tab to refresh used to kill the session for both —
+and since only tokens are kept, never the password, it stayed dead with no way
+back but disconnecting.
+
+Three things stop that now. A refresh **re-reads what is on disk first**, because
+another tab may already have rotated it; concurrent callers **share one in-flight
+refresh**; and a short **cross-tab lock** makes a second tab wait for the first
+one's result instead of spending a token that is already gone. If the answer is
+lost in transit, the retry checks whether the stored token moved on before
+deciding anything went wrong.
+
+When the session really is gone, the app does not sit in an error. It drops the
+dead token, switches to **Reikia prisijungti iš naujo**, and asks for the one
+thing it never stores — the password — keeping the URL, key, address, workspace
+and table. Polling stops until you are back in.
+
+Local work is not at risk in the meantime. Edits made while the session is out
+still record that **this device is ahead**, and both that flag and the last
+remote version seen are written to disk, so they survive a reload. Signing back
+in with unsent work and a remote that has moved raises the conflict dialog
+instead of picking a side.
+
 ## Darbo laiko apskaitos žiniaraštis
 
 A month per sheet: employees down the side, the days of the month across the
@@ -339,7 +365,7 @@ of querying them live from the browser.
 
 ```bash
 python3 serve.py &
-open http://localhost:8741/test.html        # 541 in-browser assertions
+open http://localhost:8741/test.html        # 583 in-browser assertions
 python3 tools/e2e/e2e.py                    # headless Chrome, real registry
 ```
 
