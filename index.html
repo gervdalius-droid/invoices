@@ -514,7 +514,8 @@ const I18N={
   pdfPaid:"Apmokėta",pdfDueNow:"Liko mokėti",
 
   /* misc */
-  saved:"Išsaugota",deleted:"Ištrinta",copied:"Nukopijuota",
+  saved:"Išsaugota",
+  handoffFrom:"Perimta iš {app} — juodraštis paruoštas",deleted:"Ištrinta",copied:"Nukopijuota",
   cancel:"Atšaukti",save:"Išsaugoti",add:"Pridėti",del:"Ištrinti",close:"Uždaryti",yes:"Taip",
   confirmDel:"Ar tikrai ištrinti?",
   popupBlocked:"Leiskite iškylančiuosius langus, kad galėtumėte spausdinti.",
@@ -800,7 +801,8 @@ const I18N={
   pdfPrintSave:"🖨 Print / save as PDF",
   pdfPaid:"Paid",pdfDueNow:"Balance due",
 
-  saved:"Saved",deleted:"Deleted",copied:"Copied",
+  saved:"Saved",
+  handoffFrom:"Handed over from {app} — draft ready",deleted:"Deleted",copied:"Copied",
   cancel:"Cancel",save:"Save",add:"Add",del:"Delete",close:"Close",yes:"Yes",
   confirmDel:"Delete this?",
   popupBlocked:"Please allow pop-ups so the invoice can be printed.",
@@ -2414,6 +2416,61 @@ function bindBuyerBox(){
     };
   }
 }
+/* =========================================================================
+   Hand-off intake — a finished job arrives from another CraftOS app.
+
+     ?from=shopflow|crm|offer&client=…&project=…&qty=…&price=…&ref=…&ws=…
+
+   It opens a DRAFT invoice with the buyer and one line already filled in.
+   Nothing is numbered, sent or saved on the customer's behalf: it is the same
+   draft they would have typed, minus the typing. A name that matches a saved
+   customer reuses that record (so terms and VAT code come with it); anything
+   else becomes a one-off buyer they can save from the editor.
+   ========================================================================= */
+function consumeHandoff(){
+  let q; try{ q=new URLSearchParams(location.search); }catch(e){ return; }
+  const from=(q.get('from')||'').trim();
+  if(!from) return;
+  /* strip it so a refresh cannot raise the same invoice twice */
+  history.replaceState(null,'',location.pathname+location.hash);
+
+  const client=(q.get('client')||'').trim();
+  const project=(q.get('project')||'').trim();
+  const ref=(q.get('ref')||'').trim();
+  const qty=num(q.get('qty'))||1;
+  const price=num(q.get('price'))||0;
+
+  newInvoice();
+  if(!EDIT) return;
+
+  if(client){
+    const want=deacc(client.toLowerCase());
+    const found=(S.customers||[]).find(c=>deacc(String(c.name||'').toLowerCase())===want);
+    if(found) setBuyerData(found);
+    else EDIT.buyer={name:client,code:'',vat:'',address:'',email:'',phone:'',
+                     contact:'',note:'',kind:'company'};
+  }
+  const line=EDIT.lines[0]||blankLine();
+  if(project||ref) line.name=project||ref;
+  line.qty=qty;
+  if(price) line.price=price;
+  EDIT.lines[0]=line;
+  if(ref) EDIT.notes=((EDIT.notes||'')+(EDIT.notes?' · ':'')+ref).trim();
+
+  render();
+  toast(t('handoffFrom').replace('{app}',from.charAt(0).toUpperCase()+from.slice(1)));
+}
+
+/* setBuyer() also repaints the editor DOM, which does not exist yet while a
+   hand-off is being assembled — this is the data half on its own. */
+function setBuyerData(c){
+  EDIT.customerId=c.id||null;
+  EDIT.buyer={name:c.name,code:c.code||'',vat:c.vat||'',address:c.address||'',
+              email:c.email||'',phone:c.phone||'',contact:c.contact||'',note:c.note||'',
+              kind:c.kind||'company'};
+  if(c.term!=null&&c.term!==''){EDIT.term=num(c.term);EDIT.dueDate=addDays(EDIT.date,EDIT.term);}
+}
+
 function setBuyer(c){
   EDIT.customerId=c.id||null;
   EDIT.buyer={name:c.name,code:c.code||'',vat:c.vat||'',address:c.address||'',
@@ -6089,6 +6146,7 @@ function boot(){
   /* If the registry was downloaded before, bring it back silently. */
   REG.loadIfCached().then(ok=>{if(ok&&VIEW==='settings')paintRegPanel();});
   Cloud.load();paintCloud();Cloud.start();
+  consumeHandoff();   /* ?from=… : open a draft from another CraftOS app */
   /* two tabs share one session: when one of them signs in or rotates the
      token, the other should pick it up instead of spending a dead one */
   window.addEventListener('storage',e=>{
