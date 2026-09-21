@@ -5,6 +5,23 @@ open `index.html` and everything lives in `localStorage`.
 
 **Live: https://gervdalius-droid.github.io/invoices/**
 
+![Invoices](docs/screenshot.png)
+
+## Why this exists
+
+Lithuanian invoicing software is a subscription, and the part that actually costs time is
+typing buyer details — company code, VAT code, address — off a scrap of paper, correctly,
+every time.
+
+So this ships an **offline index of ~233,000 registered Lithuanian companies** built from
+Registrų centras and VMI open data. You type three letters of a company name and the rest
+fills itself in. The registry serves no CORS headers, so the data is pre-built into a
+compressed blob and searched entirely in the browser — which also means it keeps working
+when the internet doesn't.
+
+The search index keeps the case-folded and raw text **byte-for-byte aligned**, so a match
+offset in the folded blob points at exactly the right line in the original.
+
 Same shell and design language as the other CraftOS apps (`offer`, `shopflow`):
 dark sticky header, sticky tab strip, cards, LT/EN toggle sharing the
 `fab_lang` key.
