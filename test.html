@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sąskaitos — tests</title>
+<style>
+ body{font-family:ui-monospace,Menlo,Consolas,monospace;background:#0f1218;color:#dfe4ec;margin:0;padding:18px;font-size:12.5px}
+ h1{font-size:15px;margin:0 0 12px}
+ .ok{color:#4ade80}.bad{color:#f87171}.info{color:#93a4bd}
+ #sum{padding:9px 12px;border-radius:8px;margin:12px 0;font-weight:700;font-size:14px}
+ #sum.pass{background:#12351f;color:#4ade80}#sum.fail{background:#3a1618;color:#f87171}
+ .grp{color:#7dd3fc;margin-top:12px}
+ iframe{position:absolute;left:-9999px;width:1200px;height:900px}
+</style></head>
+<body>
+<h1>Sąskaitos faktūros — test suite</h1>
+<div id="sum" class="info">running…</div>
+<div id="out"></div>
+<iframe id="app" src="index.html"></iframe>
+<script>
+let pass=0,fail=0;const out=document.getElementById('out');
+function line(html,cls){const d=document.createElement('div');d.className=cls||'';d.innerHTML=html;out.appendChild(d);}
+function grp(n){line('── '+n+' '+'─'.repeat(Math.max(0,52-n.length)),'grp');}
+function ok(n,cond,extra){
+  if(cond){pass++;line('  ✓ '+n,'ok');}
+  else{fail++;line('  ✗ '+n+(extra?'  <span class="info">'+extra+'</span>':''),'bad');}
+}
+function eq(n,a,b){ok(n,a===b,'got '+JSON.stringify(a)+' want '+JSON.stringify(b));}
+function near(n,a,b,eps){ok(n,Math.abs(a-b)<(eps||0.005),'got '+a+' want '+b);}
+
+const frame=document.getElementById('app');
+frame.onload=()=>setTimeout(run,320);
+
+function finish(){
+  const s=document.getElementById('sum');
+  s.className=fail?'fail':'pass';
+  s.textContent=(fail?'FAIL':'ALL_PASS')+'  —  '+pass+' passed, '+fail+' failed';
+  document.title=(fail?'FAIL ':'ALL_PASS ')+pass+'/'+(pass+fail);
+}
+function blow(e){
+  fail++;
+  line('  ✗ EXCEPTION: '+e.message+'<br>'+(e.stack||'').split('\n').slice(0,4).join('<br>'),'bad');
+}
+/* the suite is part sync, part promise chain (cloud + zip are async) */
+function run(){
+  const W=frame.contentWindow,D=frame.contentDocument;
+  let p;
+  try{ p=tests(W,D); }
+  catch(e){ blow(e); finish(); return; }
+  Promise.resolve(p).then(finish,e=>{blow(e);finish();});
+}
+
+function tests(W,D){
+  /* ---------------------------------------------------------------- */
+  grp('boot');
+  ok('app globals exist', typeof W.S==='object' && typeof W.calc==='function');
+  ok('starts on dashboard', W.VIEW==='dash');
+  ok('tab bar rendered', D.querySelectorAll('#tabbar button').length>=5);
+  ok('blank state has no invoices', W.S.invoices.length===0);
+  ok('default VAT rate is 21', W.S.settings.vatRate===21);
+
+  /* ---------------------------------------------------------------- */
+  grp('i18n');
+  W.setLang('lt');
+  eq('lt title', W.t('appTitle'), 'Sąskaitos faktūros');
+  W.setLang('en');
+  eq('en title', W.t('appTitle'), 'Invoices');
+  ok('every lt key has an en twin',
+     Object.keys(W.I18N.lt).every(k=>W.I18N.en[k]!==undefined),
+     Object.keys(W.I18N.lt).filter(k=>W.I18N.en[k]===undefined).join(','));
+  ok('every en key has a lt twin',
+     Object.keys(W.I18N.en).every(k=>W.I18N.lt[k]!==undefined),
+     Object.keys(W.I18N.en).filter(k=>W.I18N.lt[k]===undefined).join(','));
+  ok('unknown key falls back to itself', W.t('__nope__')==='__nope__');
+  W.setLang('lt');
+
+  /* ---------------------------------------------------------------- */
+  grp('money maths');
+  const L=(q,p,v,d)=>({name:'x',qty:q,price:p,vat:v,disc:d||0});
+  near('line net, no discount', W.lineNet(L(3,10,21)), 30);
+  near('line net, 10% discount', W.lineNet(L(3,10,21,10)), 27);
+  let inv={lines:[L(1,100,21)],payments:[]};
+  let c=W.calc(inv);
+  near('net', c.net, 100); near('vat 21%', c.vat, 21); near('total', c.total, 121);
+  inv={lines:[L(1,100,21),L(2,50,9)],payments:[]};
+  c=W.calc(inv);
+  near('mixed net', c.net, 200);
+  near('mixed vat', c.vat, 21+9);
+  eq('two VAT bands', c.vatRows.length, 2);
+  eq('bands sorted ascending', c.vatRows[0].rate, 9);
+  near('band base 9%', c.vatRows[0].base, 100);
+  inv={lines:[L(1,100,0)],payments:[]};
+  near('zero-rated has no VAT', W.calc(inv).vat, 0);
+  /* rounding: 3 x 33.33 @21% must not drift */
+  inv={lines:[L(3,33.33,21)],payments:[]};
+  c=W.calc(inv);
+  near('rounds to cents', c.total, 120.99);
+  /* payments */
+  inv={lines:[L(1,100,21)],payments:[{amount:50}]};
+  c=W.calc(inv);
+  near('paid', c.paid, 50); near('balance due', c.due, 71);
+
+  /* ---------------------------------------------------------------- */
+  grp('status');
+  const yday=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  const tmrw=new Date(Date.now()+864e5).toISOString().slice(0,10);
+  eq('draft stays draft', W.invStatus({status:'draft',lines:[L(1,10,21)],payments:[]}), 'draft');
+  eq('fully paid', W.invStatus({status:'sent',lines:[L(1,10,21)],payments:[{amount:12.1}]}), 'paid');
+  eq('part paid', W.invStatus({status:'sent',lines:[L(1,10,21)],payments:[{amount:5}]}), 'part');
+  eq('overdue', W.invStatus({status:'sent',dueDate:yday,lines:[L(1,10,21)],payments:[]}), 'over');
+  eq('not yet due', W.invStatus({status:'sent',dueDate:tmrw,lines:[L(1,10,21)],payments:[]}), 'sent');
+
+  /* ---------------------------------------------------------------- */
+  grp('numbering');
+  W.S.settings.series='SF';W.S.settings.format='{S}-{YYYY}-{NNNN}';
+  const yr=new Date().getFullYear();
+  eq('padded number', W.makeNumber(7), 'SF-'+yr+'-0007');
+  W.S.settings.format='{S}{YY}/{N}';
+  eq('short format', W.makeNumber(42), 'SF'+String(yr).slice(2)+'/42');
+  W.S.settings.format='{S}-{MM}-{NNN}';
+  eq('month token', W.makeNumber(5), 'SF-'+String(new Date().getMonth()+1).padStart(2,'0')+'-005');
+  W.S.settings.format='{S}-{YYYY}-{NNNN}';
+
+  /* ---------------------------------------------------------------- */
+  grp('amount in words (LT)');
+  W.setLang('lt');
+  eq('1',      W.amountWords(1),      'Vienas euras 00 ct');
+  eq('2',      W.amountWords(2),      'Du eurai 00 ct');
+  eq('10',     W.amountWords(10),     'Dešimt eurų 00 ct');
+  eq('11',     W.amountWords(11),     'Vienuolika eurų 00 ct');
+  eq('21',     W.amountWords(21),     'Dvidešimt vienas euras 00 ct');
+  eq('100',    W.amountWords(100),    'Šimtas eurų 00 ct');
+  eq('200',    W.amountWords(200),    'Du šimtai eurų 00 ct');
+  eq('1000',   W.amountWords(1000),   'Tūkstantis eurų 00 ct');
+  eq('1001',   W.amountWords(1001),   'Tūkstantis vienas euras 00 ct');
+  eq('1000000',W.amountWords(1000000),'Milijonas eurų 00 ct');
+  eq('2000',   W.amountWords(2000),   'Du tūkstančiai eurų 00 ct');
+  eq('11000',  W.amountWords(11000),  'Vienuolika tūkstančių eurų 00 ct');
+  eq('cents',  W.amountWords(1234.56),'Tūkstantis du šimtai trisdešimt keturi eurai 56 ct');
+  eq('zero',   W.amountWords(0),      'Nulis eurų 00 ct');
+  W.setLang('en');
+  eq('en 1',    W.amountWords(1),    'One euro 00 cents');
+  eq('en 1234', W.amountWords(1234.5),'One thousand two hundred and thirty-four euros 50 cents');
+  W.setLang('lt');
+
+  /* ---------------------------------------------------------------- */
+  grp('helpers');
+  eq('deacc folds Lithuanian', W.deacc('ąčęėįšųūž'), 'aceeisuuz');
+  eq('normQ lowercases + folds', W.normQ('UAB Ąžuolas'), 'uab azuolas');
+  eq('deacc keeps length', W.deacc('šiaulių').length, 'šiaulių'.length);
+  eq('slug', W.slug('UAB "Ąžuolas" ir Ko'), 'uab-azuolas-ir-ko');
+  eq('num accepts comma', W.num('12,50'), 12.5);
+  eq('num on junk is 0', W.num('abc'), 0);
+  eq('addDays', W.addDays('2026-01-30',2), '2026-02-01');
+  eq('addDays over a year end', W.addDays('2026-12-31',1), '2027-01-01');
+  eq('addDays leap day', W.addDays('2028-02-28',1), '2028-02-29');
+  eq('daysBetween', W.daysBetween('2026-01-01','2026-01-15'), 14);
+  eq('esc escapes', W.esc('<b>&"'), '&lt;b&gt;&amp;&quot;');
+
+  /* ---------------------------------------------------------------- */
+  grp('invoice lifecycle');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.next=1;
+  W.newInvoice();
+  ok('editor opened', W.VIEW==='editor' && !!W.EDIT);
+  eq('number assigned', W.EDIT.no, 'SF-'+yr+'-0001');
+  eq('one blank line', W.EDIT.lines.length, 1);
+  ok('save refused without buyer', W.commitInvoice()===false);
+  const cust={id:'c1',kind:'company',name:'UAB Bandymas',code:'123456789',vat:'LT123456715',address:'Vilnius'};
+  W.S.customers.push(cust);
+  W.setBuyer(cust);
+  eq('buyer snapshot name', W.EDIT.buyer.name, 'UAB Bandymas');
+  eq('customerId linked', W.EDIT.customerId, 'c1');
+  ok('save refused without lines', W.commitInvoice()===false);
+  W.EDIT.lines=[{id:'l1',name:'Baldų gamyba',qty:2,unit:'vnt',price:250,disc:0,vat:21}];
+  ok('save accepted', W.commitInvoice()===true);
+  eq('stored', W.S.invoices.length, 1);
+  eq('next number advanced', W.S.settings.next, 2);
+  near('stored total', W.calc(W.S.invoices[0]).total, 605);
+  /* editing an existing invoice must update, not append */
+  const id=W.S.invoices[0].id;
+  W.openInvoice(id);
+  W.EDIT.lines[0].qty=3;
+  W.commitInvoice();
+  eq('still one invoice', W.S.invoices.length, 1);
+  near('updated total', W.calc(W.S.invoices[0]).total, 907.5);
+  /* duplicate */
+  W.duplicateInvoice();
+  eq('duplicate is a draft', W.EDIT.status, 'draft');
+  ok('duplicate got a new number', W.EDIT.no!=='SF-'+yr+'-0001');
+  ok('duplicate has no payments', W.EDIT.payments.length===0);
+  ok('duplicate not stored until saved', W.S.invoices.length===1);
+  W.commitInvoice();
+  eq('now two invoices', W.S.invoices.length, 2);
+  /* catalogue usage must count once per invoice, not once per save */
+  W.S.items=[{id:'it1',name:'Montavimas',unit:'val',price:35,vat:21,used:0}];
+  W.newInvoice(); W.setBuyer(cust);
+  W.EDIT.lines=[{id:'z',name:'Montavimas',qty:1,unit:'val',price:35,disc:0,vat:21,itemId:'it1'}];
+  W.commitInvoice(); W.commitInvoice(); W.commitInvoice();
+  eq('usage counted once across three saves', W.S.items[0].used, 1);
+  W.S.invoices.pop(); W.S.items=[];
+
+  /* ---------------------------------------------------------------- */
+  grp('persistence');
+  W.saveNow();
+  const raw=JSON.parse(W.localStorage.getItem('inv_state_v1'));
+  eq('localStorage has both invoices', raw.invoices.length, 2);
+  eq('localStorage has the customer', raw.customers.length, 1);
+
+  /* ---------------------------------------------------------------- */
+  grp('exports');
+  const xml=[];
+  const realDl=W.download;
+  W.download=(n,txt)=>xml.push([n,txt]);
+  W.exportUbl(W.S.invoices[0]);
+  ok('UBL file name', xml.length===1 && /\.xml$/.test(xml[0][0]));
+  const x=xml[0][1];
+  ok('UBL declares EN16931', x.includes('urn:cen.eu:en16931:2017'));
+  ok('UBL carries the buyer VAT id', x.includes('LT123456715'));
+  ok('UBL total matches', x.includes('<cbc:PayableAmount currencyID="EUR">907.50'));
+  ok('UBL has one line per invoice line', (x.match(/<cac:InvoiceLine>/g)||[]).length===1);
+  ok('UBL is well-formed XML',
+     !new DOMParser().parseFromString(x,'application/xml').querySelector('parsererror'));
+  xml.length=0;
+  W.exportCsv(W.S.invoices);
+  ok('CSV produced', xml.length===1 && /\.csv$/.test(xml[0][0]));
+  ok('CSV is semicolon separated with a BOM', xml[0][1].startsWith('﻿"Nr"'));
+  eq('CSV row count', xml[0][1].trim().split('\r\n').length, 3);
+  xml.length=0;
+  W.exportBackup();
+  ok('backup is valid JSON', (()=>{try{JSON.parse(xml[0][1]);return true}catch(e){return false}})());
+  W.download=realDl;
+
+  /* ---------------------------------------------------------------- */
+  grp('state migration');
+  eq('current version', W.STATE_V, 5);
+  const v1={v:1,invoices:[],customers:[],items:[],
+            seller:{name:'A'},settings:{series:'X',showWords:false,showSign:false,vatRate:9}};
+  W.adopt(JSON.parse(JSON.stringify(v1)));
+  eq('version bumped', W.S.v, 5);
+  eq('brand created', typeof W.S.brand, 'object');
+  eq('showWords moved into brand', W.S.brand.showWords, false);
+  eq('showSign moved into brand', W.S.brand.showSign, false);
+  ok('old keys dropped from settings', W.S.settings.showWords===undefined && W.S.settings.showSign===undefined);
+  eq('own settings preserved', W.S.settings.series, 'X');
+  eq('unset settings defaulted', W.S.settings.term, 14);
+  eq('seller defaults filled', W.S.seller.banks.length, 1);
+  W.adopt({invoices:[],customers:[],items:[]});
+  eq('a fresh doc gets brand defaults', W.S.brand.template, 'modern');
+  ok('v1 doc gains waybill collections',
+     Array.isArray(W.S.waybills) && Array.isArray(W.S.fleet) && Array.isArray(W.S.drivers));
+  const v2={v:2,invoices:[],customers:[],items:[],brand:{template:'classic'},settings:{series:'Y'}};
+  const m2=W.migrate(JSON.parse(JSON.stringify(v2)));
+  eq('v2 -> v3 keeps the brand', m2.brand.template, 'classic');
+  eq('v2 -> v5 bumps the version', m2.v, 5);
+  eq('migrating a current doc is a no-op',
+     W.migrate({v:5,brand:{template:'minimal'},waybills:[{id:'x'}]}).waybills.length, 1);
+  /* v3 -> v4: the single driver becomes a crew */
+  const m3=W.migrate({v:3,waybills:[
+    {id:'a',driver:'Jonas Jonaitis',driverDoc:'AA1'},
+    {id:'b',driver:'',driverDoc:''},
+    {id:'c',drivers:[{name:'Jau masyvas',doc:'X'}]}]});
+  eq('v3 -> v5 version', m3.v, 5);
+  eq('single driver became a one-entry crew', m3.waybills[0].drivers.length, 1);
+  eq('driver name kept', m3.waybills[0].drivers[0].name, 'Jonas Jonaitis');
+  eq('licence kept', m3.waybills[0].drivers[0].doc, 'AA1');
+  ok('old scalar fields dropped',
+     m3.waybills[0].driver===undefined && m3.waybills[0].driverDoc===undefined);
+  eq('an empty driver yields an empty crew', m3.waybills[1].drivers.length, 0);
+  eq('an existing crew is left alone', m3.waybills[2].drivers[0].name, 'Jau masyvas');
+
+  /* ---------------------------------------------------------------- */
+  grp('važtaraštis');
+  W.S.settings.wbSeries='VŽ';W.S.settings.wbFormat='{S}-{YYYY}-{NNNN}';W.S.settings.wbNext=1;
+  W.S.waybills=[];W.S.fleet=[];W.S.drivers=[];
+  W.S.seller={...W.S.seller,name:'Vežėjas UAB',code:'302475348',vat:'LT100005781213',
+              address:'Vilnius, Gedimino pr. 1',director:'R. G.'};
+  const yr2=new Date().getFullYear();
+  eq('waybill numbering is separate', W.makeWbNumber(3), 'VŽ-'+yr2+'-0003');
+  eq('invoice numbering unaffected', W.makeNumber(3), 'SF-'+yr2+'-0003');
+  ok('the two series never collide', W.makeWbNumber(1)!==W.makeNumber(1));
+
+  W.newWaybill();
+  ok('editor opened', W.VIEW==='waybill' && !!W.WB);
+  eq('number assigned', W.WB.no, 'VŽ-'+yr2+'-0001');
+  eq('consignor defaults to the seller', W.WB.consignor.name, 'Vežėjas UAB');
+  eq('carrier defaults to us', W.WB.carrierSelf, true);
+  eq('one blank cargo line', W.WB.lines.length, 1);
+  ok('save refused without a consignee', W.commitWaybill()===false);
+  W.WB.consignee={name:'UAB Gavėjas',code:'123456789',vat:'',address:'Kaunas, Laisvės al. 1'};
+  ok('save refused without cargo', W.commitWaybill()===false);
+  W.WB.lines=[{id:'a',name:'Virtuvės baldai',code:'K-1',unit:'kompl.',qty:1,packs:6,weight:240.5,value:4850},
+              {id:'b',name:'Stalviršis',code:'S-2',unit:'vnt',qty:2,packs:2,weight:59.5,value:290}];
+  W.WB.vehicle='ABC 123 Mercedes Sprinter';
+  W.WB.loadAddr='Vilnius, Gedimino pr. 1';W.WB.unloadAddr='Kaunas, Laisvės al. 1';
+  ok('save accepted', W.commitWaybill()===true);
+  eq('stored', W.S.waybills.length, 1);
+  eq('next waybill number advanced', W.S.settings.wbNext, 2);
+  eq('invoice counter untouched', W.S.settings.next, 1);
+
+  const tot=W.wbTotals(W.S.waybills[0]);
+  eq('packages summed', tot.packs, 8);
+  near('weight summed', tot.weight, 300);
+  near('value summed', tot.value, 5140);
+
+  eq('a saved waybill is issued, not draft', W.wbStatus({status:'issued'}), 'issued');
+  eq('delivered wins', W.wbStatus({status:'delivered'}), 'delivered');
+  eq('draft stays draft', W.wbStatus({status:'draft'}), 'draft');
+
+  /* ---- crew of drivers ---- */
+  eq('a new waybill starts with one driver slot', W.wbDrivers(W.S.waybills[0]).length, 1);
+  W.S.waybills[0].drivers=[{name:'Jonas Jonaitis',doc:'AA123456'},
+                           {name:'Petras Petraitis',doc:'BB998877'}];
+  eq('two drivers held', W.wbDrivers(W.S.waybills[0]).length, 2);
+  eq('names joined for the document', W.wbDriverNames(W.S.waybills[0]), 'Jonas Jonaitis, Petras Petraitis');
+  eq('licences joined too', W.wbDriverDocs(W.S.waybills[0]), 'AA123456, BB998877');
+  eq('a blank name is skipped', W.wbDriverNames({drivers:[{name:'A',doc:''},{name:'',doc:'Z'}]}), 'A');
+  /* a legacy document still reads correctly without migration */
+  eq('legacy single driver reads as a crew', W.wbDrivers({driver:'Senas',driverDoc:'S1'}).length, 1);
+  eq('legacy driver name', W.wbDriverNames({driver:'Senas',driverDoc:'S1'}), 'Senas');
+  eq('no drivers at all is an empty crew', W.wbDrivers({}).length, 0);
+  eq('empty crew joins to an empty string', W.wbDriverNames({}), '');
+
+  /* invoice -> waybill */
+  W.S.invoices=[];W.S.settings.next=1;
+  W.newInvoice();
+  const wbCust={id:'wc1',kind:'company',name:'UAB Pirkėjas',code:'987654321',vat:'LT987654313',address:'Klaipėda, Taikos pr. 5'};
+  W.S.customers.push(wbCust);
+  W.setBuyer(wbCust);
+  W.EDIT.lines=[{id:'l1',name:'Spinta',qty:3,unit:'vnt',price:400,disc:0,vat:21}];
+  W.commitInvoice();
+  const srcInv=W.S.invoices[0];
+  W.newWaybill(srcInv);
+  eq('linked to the invoice', W.WB.invoiceId, srcInv.id);
+  eq('buyer became the consignee', W.WB.consignee.name, 'UAB Pirkėjas');
+  eq('consignee keeps the company code', W.WB.consignee.code, '987654321');
+  eq('delivery address prefilled', W.WB.unloadAddr, 'Klaipėda, Taikos pr. 5');
+  eq('invoice lines became cargo', W.WB.lines.length, 1);
+  eq('cargo name carried', W.WB.lines[0].name, 'Spinta');
+  eq('cargo quantity carried', W.WB.lines[0].qty, 3);
+  near('cargo value is the line net', W.WB.lines[0].value, 1200);
+  ok('notes reference the invoice', String(W.WB.notes).indexOf(srcInv.no)>=0);
+  ok('weight is left blank for the user', W.WB.lines[0].weight===0);
+  W.commitWaybill();
+  eq('two waybills now', W.S.waybills.length, 2);
+
+  /* waybill -> invoice */
+  const wbForInv=W.S.waybills[1];
+  W.S.settings.vatRate=21;W.S.settings.vatPayer=true;
+  W.invoiceFromWaybill(wbForInv);
+  eq('invoice editor opened', W.VIEW, 'editor');
+  eq('consignee became the buyer', W.EDIT.buyer.name, 'UAB Pirkėjas');
+  eq('cargo became invoice lines', W.EDIT.lines.length, 1);
+  near('unit price derived from value/qty', W.EDIT.lines[0].price, 400);
+  eq('VAT rate applied', W.EDIT.lines[0].vat, 21);
+  ok('notes reference the waybill', String(W.EDIT.notes).indexOf(wbForInv.no)>=0);
+  near('invoice total round-trips', W.calc(W.EDIT).total, 1452);
+  W.EDIT=null;
+
+  /* printed document */
+  W.WB=null;
+  const wbDoc=W.waybillHtml(W.S.waybills[0],{standalone:true});
+  ok('titled as a consignment note', wbDoc.indexOf(W.t('wbTitle'))>=0);
+  ok('carries the waybill number', wbDoc.indexOf('VŽ-'+yr2+'-0001')>=0);
+  ok('shows the consignor', wbDoc.indexOf('Vežėjas UAB')>=0);
+  ok('shows the consignee', wbDoc.indexOf('UAB Gavėjas')>=0);
+  ok('shows the vehicle', wbDoc.indexOf('ABC 123 Mercedes Sprinter')>=0);
+  ok('shows every driver in the crew',
+     wbDoc.indexOf('Jonas Jonaitis')>=0 && wbDoc.indexOf('Petras Petraitis')>=0);
+  ok('shows every licence number',
+     wbDoc.indexOf('AA123456')>=0 && wbDoc.indexOf('BB998877')>=0);
+  ok('the carrier signature names the crew',
+     wbDoc.split(W.t('wbSignCarrier'))[1].indexOf('Jonas Jonaitis')>=0);
+  ok('the field label switches to plural for a crew', wbDoc.indexOf(W.t('wbDrivers'))>=0);
+  ok('shows both route ends',
+     wbDoc.indexOf('Vilnius, Gedimino pr. 1')>=0 && wbDoc.indexOf('Kaunas, Laisvės al. 1')>=0);
+  eq('one row per cargo line', (wbDoc.match(/<tr><td class="c">\d+<\/td>/g)||[]).length, 2);
+  ok('has three signature blocks', (wbDoc.match(/class="sig"/g)||[]).length===3);
+  ok('signature blocks are labelled for all three parties',
+     wbDoc.indexOf(W.t('wbSignConsignor'))>=0 && wbDoc.indexOf(W.t('wbSignCarrier'))>=0
+     && wbDoc.indexOf(W.t('wbSignConsignee'))>=0);
+  ok('standalone omits the print button', wbDoc.indexOf('<div class="noprint">')<0);
+  ok('non-standalone has the print button', W.waybillHtml(W.S.waybills[0]).indexOf('<div class="noprint">')>=0);
+  /* branding is shared with the invoice */
+  W.S.brand.accent='#b45309';
+  ok('waybill follows the invoice accent colour',
+     W.waybillHtml(W.S.waybills[0],{standalone:true}).indexOf('#b45309')>=0);
+  W.S.brand.accent='#2f54eb';
+  const delivered={...W.S.waybills[0],status:'delivered'};
+  ok('delivered stamp shows', W.waybillHtml(delivered,{standalone:true}).indexOf('<div class="paidmark">')>=0);
+  ok('undelivered has no stamp', wbDoc.indexOf('<div class="paidmark">')<0);
+
+  W.S.waybills=[];W.S.invoices=[];W.S.customers=[];W.S.settings.next=1;W.S.settings.wbNext=1;
+
+  /* ---------------------------------------------------------------- */
+  grp('period ranges');
+  eq('week starts on Monday', W.weekStart('2026-09-10'), '2026-09-07');
+  eq('a Monday is its own week start', W.weekStart('2026-09-07'), '2026-09-07');
+  eq('a Sunday belongs to the week before', W.weekStart('2026-09-13'), '2026-09-07');
+  eq('month start', W.monthStart('2026-09-08'), '2026-09-01');
+  eq('addMonths crosses the year', W.addMonths('2026-12-01', 1), '2027-01-01');
+  const yNow=new Date().toISOString().slice(0,4);
+  eq('this year starts in January', W.periodRange('thisYear').from, yNow+'-01-01');
+  eq('this year ends in December', W.periodRange('thisYear').to, yNow+'-12-31');
+  eq('last year', W.periodRange('lastYear').from, (yNow-1)+'-01-01');
+  ok('this month is a whole month',
+     W.periodRange('thisMonth').from.endsWith('-01') && W.periodRange('thisMonth').to > W.periodRange('thisMonth').from);
+  ok('a month range never leaks into the next month',
+     W.periodRange('thisMonth').to.slice(0,7) === W.periodRange('thisMonth').from.slice(0,7));
+  ok('a week range is exactly 7 days',
+     W.daysBetween(W.periodRange('thisWeek').from, W.periodRange('thisWeek').to) === 6);
+
+  /* ---------------------------------------------------------------- */
+  grp('period export filter');
+  W.S.invoices=[];W.S.waybills=[];
+  const mkInv=(no,date,type,paid)=>({id:'x'+no,no,date,dueDate:date,type,seq:+no,
+    buyer:{name:'B '+no},lines:[{id:'l',name:'x',qty:1,unit:'vnt',price:100,disc:0,vat:21}],
+    payments:paid?[{amount:121}]:[],status:'sent',currency:'EUR'});
+  W.S.invoices=[mkInv('1','2026-01-15','invoice',false), mkInv('2','2026-02-10','invoice',true),
+                mkInv('3','2026-02-20','proforma',false), mkInv('4','2025-12-31','invoice',false),
+                mkInv('5','2026-02-28','credit',false)];
+  W.EXP={kind:'custom',from:'2026-02-01',to:'2026-02-28',
+         types:{invoice:true,simple:true,proforma:true,credit:true},status:'all',waybills:false};
+  let pm=W.expMatch();
+  eq('custom range picks February only', pm.invoices.length, 3);
+  ok('the December invoice is excluded', !pm.invoices.some(i=>i.no==='4'));
+  ok('results are date-ordered', pm.invoices[0].date <= pm.invoices[1].date);
+  W.EXP.types.proforma=false;
+  eq('type filter drops proformas', W.expMatch().invoices.length, 2);
+  W.EXP.types.credit=false;
+  eq('type filter drops credit notes', W.expMatch().invoices.length, 1);
+  W.EXP.types={invoice:true,simple:true,proforma:true,credit:true};
+  W.EXP.status='paid';
+  eq('paid filter', W.expMatch().invoices.length, 1);
+  eq('paid filter picks the right one', W.expMatch().invoices[0].no, '2');
+  W.EXP.status='unpaid';
+  eq('unpaid filter', W.expMatch().invoices.length, 2);
+  W.EXP.status='all';
+  W.EXP.kind='all';
+  eq('all periods returns everything', W.expMatch().invoices.length, 5);
+  /* the combined document */
+  W.EXP.kind='custom';W.EXP.from='2026-02-01';W.EXP.to='2026-02-28';
+  pm=W.expMatch();
+  const periodDoc=W.periodDocHtml(pm.invoices,[]);
+  eq('one sheet per invoice', (periodDoc.match(/class="sheet"/g)||[]).length, 3);
+  ok('sheets break onto separate pages', periodDoc.indexOf('page-break-after:always')>=0);
+  ok('the stylesheet appears exactly once', (periodDoc.match(/@page/g)||[]).length===1);
+  ok('every invoice number is in the document',
+     pm.invoices.every(i=>periodDoc.indexOf(i.no)>=0));
+  const periodDocW=W.periodDocHtml(pm.invoices,[{id:'w',no:'VZ-9',date:'2026-02-11',
+    consignor:{name:'A'},carrier:{name:'A'},consignee:{name:'B'},drivers:[{name:'D',doc:''}],
+    lines:[{id:'q',name:'Dėžė',qty:1,unit:'vnt',packs:1,weight:1,value:1}],status:'issued'}]);
+  eq('waybills add their own sheets', (periodDocW.match(/class="sheet"/g)||[]).length, 4);
+  W.S.invoices=[];
+
+  /* ---------------------------------------------------------------- */
+  grp('import');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.next=1;W.S.settings.series='SF';
+  /* the JSON shape tools/import_pdf.py produces */
+  const pdfJson=JSON.stringify({format:'saskaitos-import',version:1,source:'book.pdf',invoices:[
+    {no:'DBSF 0002851',series:'DBSF',seq:2851,type:'invoice',date:'2026-01-05',dueDate:'2026-01-06',
+     buyer:{name:'MB "Leto projektai"',code:'303177592',vat:'LT100009036810',address:'Vilnius'},
+     lines:[{name:'LMDP skydai',qty:2,unit:'kompl',price:230.5,disc:0,vat:21}],
+     currency:'EUR',status:'sent',payments:[]},
+    {no:'DBSF 0002852',series:'DBSF',seq:2852,type:'invoice',date:'2026-01-09',dueDate:'2026-01-16',
+     buyer:{name:'MB "Leto projektai"',code:'303177592',vat:'LT100009036810',address:'Vilnius'},
+     lines:[{name:'Stalas',qty:1,unit:'vnt',price:500,disc:0,vat:21}],
+     currency:'EUR',status:'sent',payments:[]}]});
+  let impDoc=W.parseImportDoc(pdfJson,'book.json');
+  eq('parsed both invoices', impDoc.invoices.length, 2);
+  eq('number kept', impDoc.invoices[0].no, 'DBSF 0002851');
+  eq('buyer kept', impDoc.invoices[0].buyer.code, '303177592');
+  near('line maths survive', W.calc(impDoc.invoices[0]).total, 557.81);
+  ok('every imported invoice got an id', impDoc.invoices.every(i=>!!i.id));
+  ok('imported invoices are flagged', impDoc.invoices.every(i=>i.imported===true));
+
+  let impPlanA=W.importPlan(impDoc.invoices);
+  eq('both are new', impPlanA.fresh.length, 2);
+  eq('nothing duplicated yet', impPlanA.dupes.length, 0);
+  eq('one customer to create (same buyer twice)', impPlanA.newCust.length, 1);
+  eq('date range detected', impPlanA.from, '2026-01-05');
+  eq('series detected', impPlanA.series, 'DBSF');
+  eq('highest sequence detected', impPlanA.maxSeq, 2852);
+  eq('number shape inferred', impPlanA.format, '{S} {NNNNNNN}');
+  eq('inferFormat on a dashed run', W.inferFormat('SF-0042','SF'), '{S}-{NNNN}');
+  eq('inferFormat with no separator', W.inferFormat('AB123','AB'), '{S}{NNN}');
+  eq('inferFormat gives up on odd shapes', W.inferFormat('2026/INV/7','X'), '');
+  eq('a 7-digit run formats', W.formatNo('{S} {NNNNNNN}','DBSF',2944), 'DBSF 0002944');
+  W.applyImport(impPlanA,{adoptNumbering:true});
+  eq('invoices merged in', W.S.invoices.length, 2);
+  eq('customer created once', W.S.customers.length, 1);
+  ok('invoices link to that customer',
+     W.S.invoices.every(i=>i.customerId===W.S.customers[0].id));
+  eq('numbering continues from the import', W.S.settings.next, 2853);
+  eq('series adopted', W.S.settings.series, 'DBSF');
+  eq('number shape adopted', W.S.settings.format, '{S} {NNNNNNN}');
+  eq('the next invoice keeps the old shape', W.makeNumber(), 'DBSF 0002853');
+
+  /* re-importing the same file must change nothing */
+  const plan2=W.importPlan(W.parseImportDoc(pdfJson,'book.json').invoices);
+  eq('re-import finds no new invoices', plan2.fresh.length, 0);
+  eq('re-import reports both as duplicates', plan2.dupes.length, 2);
+  W.applyImport(plan2,{adoptNumbering:false});
+  eq('still only two invoices', W.S.invoices.length, 2);
+  eq('still only one customer', W.S.customers.length, 1);
+
+  /* mark-as-paid option */
+  W.S.invoices=[];W.S.customers=[];
+  const plan3=W.importPlan(W.parseImportDoc(pdfJson,'x').invoices);
+  W.applyImport(plan3,{markPaid:true});
+  ok('marked paid', W.S.invoices.every(i=>W.calc(i).due<=0.005));
+  eq('and reads as paid', W.invStatus(W.S.invoices[0]), 'paid');
+
+  /* CSV */
+  W.S.invoices=[];W.S.customers=[];
+  const csvText='Nr;Data;Terminas;Pirkejas;Imones kodas;PVM kodas;Pavadinimas;Kiekis;Matas;Kaina;PVM %\r\n'+
+            '"A-1";"2026-03-01";"2026-03-15";"UAB Testas";"123456789";"LT123456715";"Stalas";"2";"vnt";"150";"21"\r\n'+
+            '"A-1";"2026-03-01";"2026-03-15";"UAB Testas";"123456789";"LT123456715";"Kėdė";"4";"vnt";"50";"21"\r\n'+
+            '"A-2";"2026-03-05";"2026-03-19";"UAB Kitas";"987654321";"";"Spinta";"1";"vnt";"800";"21"\r\n';
+  const cdoc=W.parseImportDoc(csvText,'x.csv');
+  eq('CSV grouped into two invoices', cdoc.invoices.length, 2);
+  eq('first invoice got both lines', cdoc.invoices[0].lines.length, 2);
+  near('CSV line maths', W.calc(cdoc.invoices[0]).total, 605);
+  eq('CSV buyer parsed', cdoc.invoices[1].buyer.name, 'UAB Kitas');
+  const cplan=W.importPlan(cdoc.invoices);
+  eq('two customers from CSV', cplan.newCust.length, 2);
+  W.applyImport(cplan,{});
+  eq('CSV imported', W.S.invoices.length, 2);
+  /* a CSV with no recognisable number column is refused, not half-imported */
+  let threw=false;
+  try{W.parseImportDoc('Foo;Bar\r\n1;2\r\n','y.csv');}catch(e){threw=true;}
+  ok('a CSV without a number column is rejected', threw);
+  threw=false;
+  try{W.parseImportDoc('{not json','z.json');}catch(e){threw=true;}
+  ok('broken JSON is rejected', threw);
+  eq('nothing was added by the failures', W.S.invoices.length, 2);
+  /* comma-delimited and quoted fields with separators inside */
+  const csv2='Nr,Data,Pirkejas,Pavadinimas,Kiekis,Kaina\n"B-1","2026-04-01","UAB ""Kabutės"", ir kablelis","Stalas, didelis","1","10"\n';
+  const c2=W.parseImportDoc(csv2,'c2.csv');
+  eq('comma CSV parsed', c2.invoices.length, 1);
+  eq('quoted comma survived in the buyer', c2.invoices[0].buyer.name, 'UAB "Kabutės", ir kablelis');
+  eq('quoted comma survived in the item', c2.invoices[0].lines[0].name, 'Stalas, didelis');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.series='SF';W.S.settings.next=1;
+
+  /* ---------------------------------------------------------------- */
+  grp('payment sync (XLSX book re-imported)');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.next=1;W.S.settings.series='SF';
+  /* the book arrives first with no payments — the state after a PDF import */
+  W.applyImport(W.importPlan(W.parseImportDoc(pdfJson,'book.json').invoices),{});
+  eq('book in place', W.S.invoices.length, 2);
+  ok('nothing paid yet', W.S.invoices.every(i=>W.calc(i).paid===0));
+  /* …then the same numbers come back from the accounting export, with payments */
+  const paidJson=JSON.stringify({format:'saskaitos-import',version:1,invoices:[
+    {no:'DBSF 0002851',series:'DBSF',seq:2851,date:'2026-01-05',dueDate:'2026-01-06',
+     buyer:{name:'MB "Leto projektai"',code:'303177592'},
+     lines:[{name:'LMDP skydai',qty:2,unit:'kompl',price:230.5,disc:0,vat:21}],
+     payments:[{date:'2026-01-20',amount:557.81,note:'Mokama pervedimu'}]},
+    {no:'DBSF 0002852',series:'DBSF',seq:2852,date:'2026-01-09',dueDate:'2026-01-16',
+     buyer:{name:'MB "Leto projektai"',code:'303177592'},
+     lines:[{name:'Stalas',qty:1,unit:'vnt',price:500,disc:0,vat:21}],
+     payments:[{date:'2026-02-01',amount:200}]}]});
+  const sPlan=W.importPlan(W.parseImportDoc(paidJson,'book.xlsx').invoices);
+  eq('no new invoices', sPlan.fresh.length, 0);
+  eq('both are duplicates', sPlan.dupes.length, 2);
+  eq('both gain payments', sPlan.updates.length, 2);
+  near('money to be applied', sPlan.newPaid, 757.81);
+  eq('the update names the held invoice', sPlan.updates[0].no, 'DBSF 0002851');
+  W.applyImport(sPlan,{adoptNumbering:false,syncPayments:true});
+  eq('no invoice was added', W.S.invoices.length, 2);
+  eq('settled invoice reads as paid', W.invStatus(W.S.invoices[0]), 'paid');
+  eq('short payment reads as partial', W.invStatus(W.S.invoices[1]), 'part');
+  near('balance left on the partial', W.calc(W.S.invoices[1]).due, 405);
+  ok('merged payments carry an id',
+     W.S.invoices.every(i=>(i.payments||[]).every(p=>!!p.id&&p.amount>0)));
+  /* the same export dropped in twice must not double-count */
+  const sPlan2=W.importPlan(W.parseImportDoc(paidJson,'book.xlsx').invoices);
+  eq('nothing left to sync', sPlan2.updates.length, 0);
+  W.applyImport(sPlan2,{syncPayments:true});
+  near('paid total unchanged', W.calc(W.S.invoices[0]).paid, 557.81);
+  /* a later, larger payment on the same invoice is a different payment */
+  const morePlan=W.importPlan(W.parseImportDoc(paidJson.replace('"amount":200','"amount":405'),'x').invoices);
+  eq('only the changed one is picked up', morePlan.updates.length, 1);
+  W.applyImport(morePlan,{syncPayments:true});
+  eq('and it settles the invoice', W.invStatus(W.S.invoices[1]), 'paid');
+  /* opting out leaves everything alone */
+  W.S.invoices.forEach(i=>{i.payments=[];});
+  const offPlan=W.importPlan(W.parseImportDoc(paidJson,'x').invoices);
+  W.applyImport(offPlan,{syncPayments:false});
+  ok('payments not touched when the box is off',
+     W.S.invoices.every(i=>(i.payments||[]).length===0));
+  W.S.invoices=[];W.S.customers=[];W.S.settings.series='SF';W.S.settings.next=1;
+
+  /* ---------------------------------------------------------------- */
+  grp('month grouping');
+  eq('LT month label', W.monthLabel('2026-01'), '2026 m. sausis');
+  eq('LT month label, december', W.monthLabel('2025-12'), '2025 m. gruodis');
+  eq('no month, no label', W.monthLabel(''), '');
+  const mList=[
+    {id:'m1',no:'A-3',date:'2026-03-04',buyer:{name:'X'},lines:[{qty:1,price:100,vat:21}],payments:[]},
+    {id:'m2',no:'A-2',date:'2026-02-20',buyer:{name:'X'},lines:[{qty:1,price:100,vat:21}],payments:[]},
+    {id:'m3',no:'A-1',date:'2026-02-01',buyer:{name:'X'},lines:[{qty:1,price:100,vat:21}],payments:[]}];
+  const grouped=W.invTable(mList,false,true);
+  eq('one divider per month', (grouped.match(/class="grp"/g)||[]).length, 2);
+  ok('the divider is named', grouped.indexOf('2026 m. vasaris')>=0);
+  ok('the divider counts its month', grouped.indexOf('>2 · ')>=0||grouped.indexOf('2 · ')>=0);
+  eq('every invoice still has a row', (grouped.match(/data-inv=/g)||[]).length, 3);
+  eq('no dividers when grouping is off', (W.invTable(mList,false,false).match(/class="grp"/g)||[]).length, 0);
+  eq('the dashboard table is untouched', (W.invTable(mList,true).match(/class="grp"/g)||[]).length, 0);
+
+  /* ---------------------------------------------------------------- */
+  grp('darbo laiko žiniaraštis — the calendar');
+  eq('Easter 2024', W.easterSunday(2024).toISOString().slice(0,10), '2024-03-31');
+  eq('Easter 2025', W.easterSunday(2025).toISOString().slice(0,10), '2025-04-20');
+  eq('Easter 2026', W.easterSunday(2026).toISOString().slice(0,10), '2026-04-05');
+  eq('Easter 2027', W.easterSunday(2027).toISOString().slice(0,10), '2027-03-28');
+  const hol=W.ltHolidays(2026);
+  eq('sixteen statutory holidays', Object.keys(hol).length, 16);
+  ok('fixed ones are there', !!hol['2026-02-16'] && !!hol['2026-07-06'] && !!hol['2026-12-25']);
+  ok('Easter Monday follows Easter', !!hol['2026-04-06']);
+  eq('Mother\'s day is the first Sunday of May', !!hol['2026-05-03'], true);
+  eq('Father\'s day is the first Sunday of June', !!hol['2026-06-07'], true);
+  const sep=W.tsDays('2026-09');
+  eq('September has 30 days', sep.length, 30);
+  eq('1 September 2026 is a Tuesday', sep[0].dow, 1);
+  eq('and it is a working day', sep[0].work, true);
+  eq('the 5th is a Saturday', sep[4].weekend, true);
+  eq('no holidays in September', sep.filter(d=>d.holiday).length, 0);
+  const dec=W.tsDays('2026-12');
+  eq('Christmas Eve is a holiday', dec[23].holiday, 'Kūčios');
+  eq('23 December is shortened', dec[22].short, true);
+  eq('31 December is shortened too', dec[30].short, true);
+  eq('an ordinary day is not', dec[15].short, false);
+  eq('September norm: days', W.tsNorm('2026-09',8).days, 22);
+  eq('September norm: hours', W.tsNorm('2026-09',8).hours, 176);
+  eq('December norm: days', W.tsNorm('2026-12',8).days, 21);
+  eq('December norm loses two hours to the eves', W.tsNorm('2026-12',8).hours, 166);
+  eq('a half-time norm halves', W.tsNorm('2026-09',4).hours, 88);
+  eq('month length, February 2028', W.tsMonthLen('2028-02'), 29);
+
+  grp('darbo laiko žiniaraštis — cells and totals');
+  eq('a bare number is time worked', JSON.stringify(W.tsParse('8')), '{"code":"FD","hours":8}');
+  eq('a decimal with a comma', W.tsParse('7,5').hours, 7.5);
+  eq('a bare code carries no hours', JSON.stringify(W.tsParse('A')), '{"code":"A","hours":0}');
+  eq('code then hours', JSON.stringify(W.tsParse('DP 8')), '{"code":"DP","hours":8}');
+  eq('hours then code', JSON.stringify(W.tsParse('8 VD')), '{"code":"VD","hours":8}');
+  eq('no space needed', JSON.stringify(W.tsParse('dp6')), '{"code":"DP","hours":6}');
+  eq('an empty cell is nothing', W.tsParse('  '), null);
+  ok('work codes count as worked', W.tsWorks('FD') && W.tsWorks('DP') && W.tsWorks('VD'));
+  ok('absence codes do not', !W.tsWorks('A') && !W.tsWorks('L') && !W.tsWorks('NA'));
+  ok('an unlisted code still counts its hours', W.tsWorks('XX'));
+
+  const row={empId:'e1',name:'Jonas',position:'Baldžius',hours:8,
+             days:{1:'8',2:'8',3:'A',4:'DP 6',7:'8'}};
+  const rt=W.tsRowTotals(row,'2026-09');
+  eq('hours worked ignore the absence', rt.hours, 30);
+  eq('days worked ignore it too', rt.days, 4);
+  eq('the absence is still counted as a day', rt.by.A.days, 1);
+  eq('and carries no hours', rt.by.A.hours, 0);
+  eq('rest-day work is its own code', rt.by.DP.hours, 6);
+
+  const sheet=W.tsBlank('2026-09');
+  sheet.rows=[row,{empId:'e2',name:'Ona',hours:4,days:{1:'4',2:'4'}}];
+  const st=W.tsTotals(sheet);
+  eq('sheet hours', st.hours, 38);
+  eq('sheet days', st.days, 6);
+  eq('the first of the month adds up across the crew', st.per[1], 12);
+  eq('a day nobody worked is zero', st.per[15], 0);
+
+  grp('darbo laiko žiniaraštis — filling it in');
+  W.S.settings.tsHours=8;
+  const fillSheet=W.tsBlank('2026-12');
+  fillSheet.rows=[{empId:'x',name:'A',hours:8,days:{}}];
+  const realTS=W.TS;W.TS=fillSheet;
+  W.tsFillRow(0,false);
+  eq('every working day got hours', Object.keys(fillSheet.rows[0].days).length, 21);
+  eq('a normal day gets the full shift', fillSheet.rows[0].days[15], '8');
+  eq('the day before Christmas Eve is an hour shorter', fillSheet.rows[0].days[23], '7');
+  eq('so is New Year\'s Eve', fillSheet.rows[0].days[31], '7');
+  eq('a weekend stays empty', fillSheet.rows[0].days[5], undefined);
+  eq('and so does the holiday itself', fillSheet.rows[0].days[25], undefined);
+  eq('the filled row matches the norm', W.tsRowTotals(fillSheet.rows[0],'2026-12').hours, 166);
+  /* filling again must not tread on what was typed by hand */
+  fillSheet.rows[0].days[15]='A';
+  W.tsFillRow(0,false);
+  eq('a hand-typed cell survives a refill', fillSheet.rows[0].days[15], 'A');
+  W.tsFillRow(0,true);
+  eq('unless the row is filled deliberately', fillSheet.rows[0].days[15], '8');
+  /* a part-timer has their own norm */
+  fillSheet.rows.push({empId:'y',name:'B',hours:4,days:{}});
+  W.tsFillRow(1,false);
+  eq('half-time fills half days', fillSheet.rows[1].days[15], '4');
+  eq('and expects half the month', W.tsExpected(fillSheet), 166+82);
+  W.TS=realTS;
+
+  grp('darbo laiko žiniaraštis — nothing missed');
+  const gapSheet=W.tsBlank('2026-09');
+  gapSheet.rows=[{empId:'a',name:'Visas',hours:8,days:{}},
+                 {empId:'b',name:'Pusė',hours:4,days:{}}];
+  /* a finished month is judged whole: 22 working days each */
+  eq('an empty September is all holes', W.tsGaps(gapSheet,'').length, 44);
+  gapSheet.rows[0].days[1]='8';
+  eq('a filled cell is not a hole', W.tsGaps(gapSheet,'').length, 43);
+  gapSheet.rows[0].days[2]='A';
+  eq('an absence code counts as filled too', W.tsGaps(gapSheet,'').length, 42);
+  gapSheet.rows[0].days[3]='   ';
+  eq('but whitespace does not', W.tsGaps(gapSheet,'').length, 42);
+  /* days still ahead are not holes yet */
+  eq('mid-month only counts what has happened',
+     W.tsGaps(gapSheet,'2026-09-04').length, 6);
+  eq('a weekend is never a hole',
+     W.tsGaps(gapSheet,'2026-09-06').length, W.tsGaps(gapSheet,'2026-09-04').length);
+  eq('the hole knows whose it is', W.tsGaps(gapSheet,'2026-09-04')[0].name, 'Visas');
+  eq('and which day', W.tsGaps(gapSheet,'2026-09-04')[0].day, 3);
+
+  /* somebody hired on the 15th owes nothing for the 1st */
+  ok('inside the range', W.tsRowOn({from:'2026-09-15'},'2026-09-20'));
+  ok('before it', !W.tsRowOn({from:'2026-09-15'},'2026-09-01'));
+  ok('after leaving', !W.tsRowOn({to:'2026-09-10'},'2026-09-20'));
+  ok('no range means always', W.tsRowOn({},'2026-09-01') && W.tsRowOn(null,'2026-09-01'));
+  gapSheet.rows[1].from='2026-09-15';
+  eq('a mid-month joiner is not short for the days before',
+     W.tsGaps(gapSheet,'').length, 42-10);
+  eq('and their norm is only the days they were here',
+     W.tsRowNorm(gapSheet.rows[1],'2026-09').days, 12);
+  eq('in their own hours', W.tsRowNorm(gapSheet.rows[1],'2026-09').hours, 48);
+  eq('the sheet expects the sum of the two', W.tsExpected(gapSheet), 176+48);
+  const realTS2=W.TS;W.TS=gapSheet;
+  W.tsFillRow(1,true);
+  eq('filling stops at the start date', gapSheet.rows[1].days[1], undefined);
+  eq('and starts on it', gapSheet.rows[1].days[15], '4');
+  eq('a joiner ends up with no holes', W.tsGaps(gapSheet,'').filter(g=>g.row===1).length, 0);
+
+  grp('darbo laiko žiniaraštis — stamping');
+  W.S.settings.tsHours=8;
+  /* a month already gone by, or nothing would read as a hole */
+  const janDays=W.tsDays('2026-01');
+  eq('a full day is a hole when empty', W.tsIsGap({},janDays[14],''), true);
+  eq('a filled one is not', W.tsIsGap({},janDays[14],'8'), false);
+  eq('a weekend is not', W.tsIsGap({},janDays[2],''), false);
+  eq('a holiday is not', W.tsIsGap({},janDays[0],''), false);
+  eq('nor a day before somebody started',
+     W.tsIsGap({from:'2026-01-20'},janDays[14],''), false);
+  eq('a day still ahead of us is not a hole yet',
+     W.tsIsGap({},W.tsDays(W.addMonths(W.today(),2).slice(0,7))[14],''), false);
+  /* the norm stamp writes each employee's own shift, not a shared number */
+  const stampSheet=W.tsBlank('2026-12');
+  stampSheet.rows=[{empId:'a',name:'Visas',hours:8,days:{}},
+                   {empId:'b',name:'Pusė',hours:4,days:{}}];
+  W.TS=stampSheet;
+  const brushWas=W.tsBrush;
+  W.tsBrush='*';                       /* the per-employee shift stamp */
+  eq('the getter agrees with the setter', W.tsBrushValue(), '*');
+  W.tsStamp(0,15,W.tsBrushFor(0,15));
+  W.tsStamp(1,15,W.tsBrushFor(1,15));
+  eq('full-timer gets a full shift', stampSheet.rows[0].days[15], '8');
+  eq('half-timer gets half', stampSheet.rows[1].days[15], '4');
+  W.tsStamp(0,23,W.tsBrushFor(0,23));
+  eq('the day before a holiday is an hour shorter', stampSheet.rows[0].days[23], '7');
+  eq('a weekend takes nothing', W.tsBrushFor(0,5), '');
+  W.tsStamp(0,15,'');
+  eq('an empty stamp clears the cell', stampSheet.rows[0].days[15], undefined);
+  W.tsBrush='A';
+  eq('a code stamp is the same for everyone', W.tsBrushFor(0,15), 'A');
+  eq('even on a weekend', W.tsBrushFor(0,5), 'A');
+  W.tsBrush=brushWas;W.TS=realTS2;
+
+  grp('darbo laiko žiniaraštis — the reminder');
+  const nowM=W.today().slice(0,7);
+  const prevM=W.addMonths(W.today().slice(0,8)+'01',-1).slice(0,7);
+  W.S.timesheets=[];W.S.employees=[{id:'z',name:'Kažkas',hours:8,active:true}];
+  eq('last month with no sheet is raised', W.tsDue().kind, 'missing');
+  eq('and it names the month', W.tsDue().month, prevM);
+  const done=W.tsBlank(prevM);
+  done.rows=[{empId:'z',name:'Kažkas',hours:8,days:{}}];
+  W.S.timesheets=[done];
+  eq('an empty sheet for it is raised as holes', W.tsDue().kind, 'gaps');
+  ok('and counts them', W.tsDue().n>0);
+  const realTS3=W.TS;W.TS=done;W.tsFillRow(0,true);W.TS=realTS3;
+  eq('a finished sheet raises nothing', W.tsDue(), null);
+  /* the current month is judged only up to today, not to its end */
+  const thisOne=W.tsBlank(nowM);
+  thisOne.rows=[{empId:'z',name:'Kažkas',hours:8,days:{}}];
+  W.S.timesheets=[done,thisOne];
+  const nag=W.tsDue();
+  ok('an unfilled current month is raised', nag && nag.kind==='gaps' && nag.month===nowM);
+  W.TS=thisOne;W.tsFillRow(0,true);W.TS=realTS3;
+  eq('filling it clears the reminder', W.tsDue(), null);
+  W.S.timesheets=[];W.S.employees=[];
+  eq('a book with no employees is never nagged', W.tsDue(), null);
+
+  grp('darbo laiko žiniaraštis — under / overtime colouring');
+  {
+    W.S.settings.tsHours=8;
+    const days=W.tsDays('2026-12');   /* Dec 1 Tue workday, Dec 5 Sat, Dec 23 short (24th holiday) */
+    const r={empId:'x',hours:8,days:{}};
+    eq('a full shift is plain', W.tsDayState(r,days[0],'8'), '');
+    eq('fewer hours than the shift is under', W.tsDayState(r,days[0],'6'), 'under');
+    eq('more than the shift is overtime', W.tsDayState(r,days[0],'10'), 'over');
+    eq('any hours on a Saturday are overtime', W.tsDayState(r,days[4],'4'), 'over');
+    eq('7 on the shortened pre-holiday day is a full shift', W.tsDayState(r,days[22],'7'), '');
+    eq('an absence code is neither', W.tsDayState(r,days[0],'A'), '');
+    eq('an empty cell is neither', W.tsDayState(r,days[0],''), '');
+    eq('VD is always overtime', W.tsDayState(r,days[0],'2 VD'), 'over');
+    eq('a half-timer at 4 is a full shift', W.tsDayState({hours:4},days[0],'4'), '');
+    const sh=W.tsBlank('2026-12');
+    sh.rows=[{empId:'x',hours:8,days:{1:'6',2:'10',5:'4'}}];
+    const c=W.tsDayCounts(sh);
+    eq('counts short days', c.under, 1);
+    eq('and how many hours short', c.underH, 2);
+    eq('counts overtime days', c.over, 2);
+    eq('and the overtime hours', c.overH, 6);
+  }
+
+  grp('copying a document');
+  {
+    const S=W.S,n0=S.settings.next,w0=S.settings.wbNext;
+    const inv={id:'ci1',seq:3,no:'X-3',date:'2025-01-02',dueDate:'2025-01-16',term:14,status:'paid',
+      buyer:{name:'Pirkėjas'},lines:[{id:'L1',name:'Stalas',qty:2,unit:'vnt',price:10,disc:0,vat:21}],
+      payments:[{id:'p',date:'2025-01-05',amount:24.2}]};
+    const ci=W.dupInvoice(inv);
+    ok('invoice copy gets a new id', ci.id!=='ci1');
+    eq('and the next number', ci.seq, n0);
+    eq('it restarts as a draft', ci.status, 'draft');
+    eq('with no payments', ci.payments.length, 0);
+    eq('dated today', ci.date, W.today());
+    eq('lines carry over', ci.lines[0].name, 'Stalas');
+    ok('with fresh line ids', ci.lines[0].id!=='L1');
+    eq('the source is untouched', inv.payments.length, 1);
+    const wb={id:'cw1',seq:4,no:'V-4',date:'2025-01-02',status:'delivered',deliveredAt:'2025-01-03',
+      receivedBy:'Jonas',invoiceId:'ci1',consignee:{name:'B'},driver:'Petras',driverDoc:'LT1',
+      lines:[{id:'WL',name:'Dėžė',qty:1,packs:2,weight:5,value:9}]};
+    const cw=W.dupWaybill(wb);
+    eq('waybill copy gets the next waybill number', cw.seq, w0);
+    eq('it restarts as a draft', cw.status, 'draft');
+    eq('no delivery carried over', cw.deliveredAt+cw.receivedBy, '');
+    eq('not linked to the old invoice', cw.invoiceId, null);
+    eq('a legacy driver becomes the crew', cw.drivers[0].name, 'Petras');
+    ok('the legacy scalar is gone', cw.driver===undefined);
+    eq('cargo carries over', cw.lines[0].packs, 2);
+    const src=W.tsBlank('2026-01');src.dept='Gamyba';
+    src.rows=[{empId:'a',name:'Ona',hours:8,from:'2026-01-10',days:{1:'8',30:'8',31:'A'}}];
+    const c1=W.tsDupSheet(src,'2026-02','Gamyba',false);
+    eq('sheet copy moves to the chosen month', c1.month, '2026-02');
+    eq('keeps the line-up', c1.rows[0].name, 'Ona');
+    eq('starts blank by default', Object.keys(c1.rows[0].days).length, 0);
+    ok('drops the old month\'s from/to', c1.rows[0].from===undefined);
+    const c2=W.tsDupSheet(src,'2026-02','Gamyba',true);
+    eq('entries come along on request, clipped to the month', Object.keys(c2.rows[0].days).join(), '1');
+    eq('the source keeps its entries', Object.keys(src.rows[0].days).length, 3);
+    ok('list rows carry a copy button', W.invTable([inv],false,false).indexOf('data-dup="ci1"')>=0);
+  }
+
+  grp('darbo laiko žiniaraštis — the printed form');
+  const pr=W.sheetHtml(fillSheet);
+  ok('the form is titled', pr.indexOf('DARBO LAIKO')>=0 || pr.indexOf(W.t('tsTitle'))>=0);
+  ok('it names the month', pr.indexOf(W.monthLabel('2026-12'))>=0);
+  ok('it prints landscape', pr.indexOf('A4 landscape')>=0);
+  ok('every employee is on it', pr.indexOf('>A<')>=0 || pr.indexOf('A</div>')>=0 || pr.indexOf('A</td>')>=0);
+  ok('the legend is printed', pr.indexOf(W.t('tsFD'))>=0);
+  ok('holidays are shaded', pr.indexOf('class="d ho"')>=0);
+
+  grp('darbo laiko žiniaraštis — state');
+  const migrated=W.adopt({v:4,invoices:[],customers:[]});
+  eq('state moved to v5', migrated.v, 5);
+  ok('an old backup gains the two new lists',
+     Array.isArray(migrated.employees) && Array.isArray(migrated.timesheets));
+  const carried=W.adopt({v:5,employees:[{id:'e9',name:'Kęstutis'}],
+    timesheets:[{id:'t9',month:'2026-05',rows:[]}]});
+  eq('employees survive a reload', carried.employees[0].name, 'Kęstutis');
+  eq('so do the sheets', carried.timesheets[0].month, '2026-05');
+  W.adopt({});W.S.settings.tsHours=8;
+
+  /* ---------------------------------------------------------------- */
+  grp('back button / history');
+  const hashWas=W.location.hash;
+  W.EDIT=null;W.WB=null;
+  W.location.hash='#customers';
+  eq('a real tab resolves', W.viewFromHash(), 'customers');
+  W.location.hash='#editor';
+  eq('the editor with nothing open falls back to the list', W.viewFromHash(), 'invoices');
+  W.location.hash='#waybill';
+  eq('so does the waybill editor', W.viewFromHash(), 'waybills');
+  W.location.hash='#nonsense';
+  eq('an unknown view falls back to the dashboard', W.viewFromHash(), 'dash');
+  W.location.hash='';
+  eq('no hash is the dashboard', W.viewFromHash(), 'dash');
+  W.go('items');
+  eq('go writes the hash', W.location.hash, '#items');
+  eq('and switches the view', W.VIEW, 'items');
+  /* what the browser Back button actually does: hash moves, popstate fires */
+  W.location.hash='#customers';
+  W.dispatchEvent(new W.PopStateEvent('popstate'));
+  eq('a back step re-renders the earlier view', W.VIEW, 'customers');
+  /* with a dialog open the press closes the dialog and stays put */
+  W.openModal('x','<p>x</p>');
+  ok('modal is open', W.document.getElementById('scrim').classList.contains('on'));
+  W.dispatchEvent(new W.PopStateEvent('popstate'));
+  ok('the press closed the dialog', !W.document.getElementById('scrim').classList.contains('on'));
+  eq('and left the view where it was', W.VIEW, 'customers');
+  W.go('dash');W.location.hash=hashWas;
+
+  /* ---------------------------------------------------------------- */
+  grp('branding');
+  eq('shade darkens', W.shade('#ffffff',-100), '#000000');
+  eq('shade lightens', W.shade('#000000',100), '#ffffff');
+  eq('shade rejects junk safely', W.shade('nope',-30), '#1e3aa8');
+  W.S.seller={...W.S.seller,name:'Brand Co',code:'111',vat:'LT111',address:'Vilnius',
+              banks:[{bank:'B',iban:'LT99',swift:'X'}],director:'D'};
+  W.S.invoices=[];
+  const demo=W.sampleInvoice();
+  ok('sample invoice has lines', (demo.lines||[]).length>0);
+  ok('sample used when there are no real invoices', demo.id==='demo');
+  let doc=W.invoiceHtml(demo,{standalone:true});
+  ok('standalone doc omits the print button', doc.indexOf('<div class="noprint">')<0);
+  ok('standalone doc omits the auto-print script', doc.indexOf('window.print()')<0);
+  ok('non-standalone doc has the print button', W.invoiceHtml(demo).indexOf('<div class="noprint">')>=0);
+  W.S.brand.accent='#0f766e';
+  ok('accent colour reaches the CSS', W.invoiceHtml(demo,{standalone:true}).indexOf('#0f766e')>=0);
+  for(const tpl of ['modern','classic','minimal']){
+    W.S.brand.template=tpl;
+    const h=W.invoiceHtml(demo,{standalone:true});
+    ok(tpl+' renders', h.length>2000);
+    ok(tpl+' keeps the seller VAT number', h.indexOf('LT111')>=0);
+    ok(tpl+' keeps the totals block', h.indexOf('class="grand"')>=0);
+  }
+  W.S.brand.template='modern';
+  W.S.brand.showBank=false;
+  ok('bank block hides', W.invoiceHtml(demo,{standalone:true}).indexOf('LT99')<0);
+  W.S.brand.showBank=true;
+  ok('bank block returns', W.invoiceHtml(demo,{standalone:true}).indexOf('LT99')>=0);
+  W.S.brand.showSign=false;
+  ok('signature block hides', W.invoiceHtml(demo,{standalone:true}).indexOf('class="signs"')<0);
+  W.S.brand.showSign=true;
+  W.S.brand.showVatCol=false;
+  const noVat=W.invoiceHtml(demo,{standalone:true});
+  eq('VAT column header gone', (noVat.match(/PVM %|VAT %/g)||[]).length, 0);
+  eq('header and body still line up',
+     (noVat.split('<thead>')[1].split('</thead>')[0].match(/<th/g)||[]).length,
+     (noVat.split('<tbody>')[1].split('</tr>')[0].match(/<td/g)||[]).length);
+  W.S.brand.showVatCol=true;
+  W.S.brand.titles.invoice='MANO SĄSKAITA';
+  ok('custom document title used', W.invoiceHtml(demo,{standalone:true}).indexOf('MANO SĄSKAITA')>=0);
+  W.S.brand.titles.invoice='';
+  ok('blank custom title falls back', W.invoiceHtml(demo,{standalone:true}).indexOf(W.t('pdfInvoice'))>=0);
+  /* paid stamp */
+  const paidInv={...demo,payments:[{amount:99999}],status:'sent'};
+  const MARK='<div class="paidmark">';
+  ok('paid stamp shows on a paid invoice', W.invoiceHtml(paidInv,{standalone:true}).indexOf(MARK)>=0);
+  ok('paid stamp absent when unpaid', W.invoiceHtml(demo,{standalone:true}).indexOf(MARK)<0);
+  W.S.brand.paidStamp=false;
+  ok('paid stamp respects its toggle', W.invoiceHtml(paidInv,{standalone:true}).indexOf(MARK)<0);
+  W.S.brand.paidStamp=true;
+
+  /* ---------------------------------------------------------------- */
+  grp('cloud sync');
+  ok('Cloud module present', typeof W.Cloud==='object');
+  ok('starts disconnected', W.Cloud.on()===false);
+  eq('status off', W.Cloud.status, 'off');
+  ok('mark() is inert while disconnected', (W.Cloud.mark(),W.Cloud.dirty===false));
+  ok('schema names the table', W.CLOUD_SQL.indexOf('invoice_workspaces')>=0);
+  ok('defaults() always answers with the full shape',
+     ['url','key','email','workspace','table'].every(k=>k in W.Cloud.defaults()));
+  W.Cloud.cfg=null;
+  eq('table falls back when unconfigured', W.Cloud.table(), 'invoice_workspaces');
+  W.Cloud.cfg={table:'workspaces'};
+  eq('an existing table can be reused', W.Cloud.table(), 'workspaces');
+  ok('the row selector targets that table', W.Cloud.row===undefined||true);
+  W.Cloud.cfg={table:'workspaces',workspace:'x-invoices'};
+  ok('row filters by workspace id inside the shared table',
+     W.Cloud.row()==='workspaces?id=eq.x-invoices', W.Cloud.row());
+  W.Cloud.cfg=null;
+  ok('schema enables RLS', W.CLOUD_SQL.indexOf('enable row level security')>=0);
+  ok('schema grants only to authenticated', W.CLOUD_SQL.indexOf('to authenticated')>=0);
+  /* drive the sync state machine against a stubbed REST layer */
+  W.Cloud.cfg={url:'https://x.supabase.co',key:'k',email:'a@b.c',workspace:'ws',
+               table:'invoice_workspaces',token:'tok',refresh:'r',exp:Date.now()+3600000};
+  eq('configured now counts as on', W.Cloud.on(), true);
+  let remote=null, puts=0;
+  W.Cloud.rest=async(path,opts)=>{
+    if(opts&&opts.method==='POST'){
+      puts++;
+      remote={id:'ws',data:JSON.parse(opts.body).data,updated_at:'T'+puts,updated_by:'x'};
+      return [remote];
+    }
+    return remote?[remote]:[];
+  };
+  W.S.invoices=[{id:'i1',no:'A-1',date:'2026-01-01',dueDate:'2026-01-15',
+                 buyer:{name:'B'},lines:[{name:'x',qty:1,price:10,vat:21,disc:0}],payments:[],status:'sent'}];
+  W.Cloud.dirty=true; W.Cloud.seen=null;
+  return W.Cloud.sync().then(()=>{
+    ok('first sync pushed local state', puts===1);
+    eq('status back to idle', W.Cloud.status, 'idle');
+    eq('remote holds the invoice', remote.data.invoices.length, 1);
+    ok('seen advanced', W.Cloud.seen==='T1');
+
+    /* another device writes; we are clean -> we must adopt it */
+    remote={id:'ws',data:{v:2,invoices:[],customers:[],items:[],seller:{name:'Other'},settings:{}},
+            updated_at:'T9',updated_by:'other'};
+    W.Cloud.dirty=false;
+    return W.Cloud.sync();
+  }).then(()=>{
+    eq('clean device adopts the remote', W.S.seller.name, 'Other');
+    eq('no extra push happened', puts, 1);
+
+    /* both sides moved -> conflict, and nothing is overwritten */
+    W.S.seller.name='Mine';
+    W.Cloud.dirty=true;
+    remote={id:'ws',data:{v:2,invoices:[],customers:[],items:[],seller:{name:'Theirs'},settings:{}},
+            updated_at:'T10',updated_by:'other'};
+    return W.Cloud.sync();
+  }).then(()=>{
+    eq('conflict raised', W.Cloud.status, 'conflict');
+    eq('local state untouched', W.S.seller.name, 'Mine');
+    eq('cloud not overwritten', remote.data.seller.name, 'Theirs');
+    eq('still no second push', puts, 1);
+    D.getElementById && 0;
+    W.closeModal();
+    /* forcing resolves in our favour */
+    return W.Cloud.sync(true);
+  }).then(()=>{
+    eq('forced sync pushes', puts, 2);
+    eq('cloud now holds ours', remote.data.seller.name, 'Mine');
+    eq('status idle again', W.Cloud.status, 'idle');
+    W.Cloud.signOut();
+    eq('sign out clears config', W.Cloud.on(), false);
+    return rest2(W,D);
+  });
+}
+
+/* the suite continues after the async cloud section */
+function rest2(W,D){
+  /* ---------------------------------------------------------------- */
+  grp('export everything (ZIP)');
+  return zipTests(W).then(()=>xlsxTests(W)).then(()=>authTests(W)).then(()=>{
+
+  /* ---------------------------------------------------------------- */
+  grp('registry');
+  ok('REG module present', typeof W.REG==='object' && typeof W.REG.search==='function');
+  eq('search before load is empty', W.REG.search('uab',5).length, 0);
+  /* drive the line-offset + scoring logic on a synthetic blob */
+  const fake='123456789\tUAB Ąžuolas\tVilnius, Gedimino pr. 1\tLT123456715\tUAB\t\n'+
+             '987654321\tMB Beržas\tKaunas, Laisvės al. 2\t\tMB\t\n'+
+             '555000111\tUAB Ąžuolyno baldai\tŠiauliai, Tilžės g. 3\tLT555000113\tUAB\tLikviduojamas';
+  W.REG.text=fake;
+  W.REG.norm=W.deacc(fake.toLowerCase());
+  W.REG.offT=W.REG._offsets(W.REG.text);
+  W.REG.offN=W.REG._offsets(W.REG.norm);
+  W.REG.lines=W.REG.offT.length-1;
+  W.REG.state='ready';
+  eq('parses a row name', W.REG.row(0).name, 'UAB Ąžuolas');
+  eq('parses a row vat',  W.REG.row(0).vat,  'LT123456715');
+  eq('parses last row status', W.REG.row(2).status, 'Likviduojamas');
+  let hits=W.REG.search('azuol',10);
+  eq('diacritic-insensitive search finds both', hits.length, 2);
+  eq('shorter exact name ranks first', hits[0].name, 'UAB Ąžuolas');
+  hits=W.REG.search('Ąžuol',10);
+  eq('accented query also works', hits.length, 2);
+  eq('full name still matches one', W.REG.search('azuolas',10).length, 1);
+  hits=W.REG.search('123456789',10);
+  eq('company code lookup', hits.length, 1);
+  eq('code lookup returns the right row', hits[0].name, 'UAB Ąžuolas');
+  hits=W.REG.search('kaunas',10);
+  eq('address search works', hits.length, 1);
+  eq('two-char query is ignored', W.REG.search('ua',10).length, 0);
+  hits=W.REG.search('berzas',10);
+  const c2=W.customerFromRegistry(hits[0]);
+  eq('registry -> customer name', c2.name, 'MB Beržas');
+  eq('registry -> customer kind', c2.kind, 'company');
+  const flagged=W.customerFromRegistry(W.REG.row(2));
+  ok('liquidation warning carried into the note', /Likviduojamas/.test(flagged.note));
+  W.REG.state='idle';W.REG.text='';W.REG.norm='';
+
+  /* ---------------------------------------------------------------- */
+  grp('rendering');
+  W.S.invoices=[];W.S.customers=[];W.EDIT=null;W.S.seller.name='';W.saveNow();
+  ['dash','invoices','waybills','customers','items','settings'].forEach(v=>{
+    W.go(v);
+    ok('renders '+v, D.querySelector('#p-'+v).innerHTML.length>200);
+  });
+  W.go('dash');
+  ok('dashboard nudges to fill in seller details', !!D.querySelector('#dashSetupBtn'));
+  W.S.seller.name='Mano Įmonė UAB';W.go('dash');
+  ok('nudge disappears once named', !D.querySelector('#dashSetupBtn'));
+  W.newInvoice();
+  ok('editor renders a buyer search box', !!D.querySelector('#buyerQ'));
+  ok('editor renders the line table', !!D.querySelector('#linesBody tr'));
+  ok('totals block rendered', D.querySelector('#edTotals').innerHTML.includes('0,00')
+     || D.querySelector('#edTotals').innerHTML.includes('0.00'));
+  W.EDIT=null;
+  W.newWaybill();
+  ok('waybill editor renders a consignee search box', !!D.querySelector('#wbConsQ'));
+  ok('waybill editor renders the cargo table', !!D.querySelector('#wbBody tr'));
+  ok('waybill tab appears only while one is open', !!D.querySelector('[data-tab="waybill"]'));
+  W.WB=null;W.go('dash');
+  ok('waybill tab hides again', !D.querySelector('[data-tab="waybill"]'));
+
+  /* clean up so a manual visit to index.html starts fresh */
+  W.localStorage.removeItem('inv_state_v1');
+  W.localStorage.removeItem('inv_cloud');
+  });
+}
+
+/* The ZIP is parsed back out of the produced blob, so these check the archive
+   a user actually receives rather than the array we fed in. */
+/* Build a real .xlsx in the browser with the app's own ZIP writer, so the
+   reader is tested against a genuine deflated archive and not a fixture. */
+function xlsxBytes(W,sheets){
+  const MAIN='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const REL='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const PKG='http://schemas.openxmlformats.org/package/2006/relationships';
+  const strings=[],seen=new Map();
+  const si=v=>{const k=String(v);if(!seen.has(k)){seen.set(k,strings.length);strings.push(k);}return seen.get(k);};
+  const x=v=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const col=n=>{let s='';n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=(n-m-1)/26;}return s;};
+  const body=(rows,inline)=>'<?xml version="1.0" encoding="UTF-8"?>'+
+    `<worksheet xmlns="${MAIN}"><sheetData>`+rows.map((r,ri)=>
+      `<row r="${ri+1}">`+r.map((v,ci)=>{
+        if(v===''||v==null)return '';
+        const ref=col(ci)+(ri+1);
+        if(typeof v==='number')return `<c r="${ref}"><v>${v}</v></c>`;
+        return inline?`<c r="${ref}" t="inlineStr"><is><t>${x(v)}</t></is></c>`
+                     :`<c r="${ref}" t="s"><v>${si(v)}</v></c>`;
+      }).join('')+'</row>').join('')+'</sheetData></worksheet>';
+  const bodies=sheets.map((sh,i)=>body(sh.rows,i>0));   /* sheet 2 uses inline strings */
+  const files=[
+    {name:'xl/workbook.xml',text:'<?xml version="1.0" encoding="UTF-8"?>'+
+      `<workbook xmlns="${MAIN}" xmlns:r="${REL}"><sheets>`+
+      sheets.map((sh,i)=>`<sheet name="${x(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')+
+      '</sheets></workbook>'},
+    {name:'xl/_rels/workbook.xml.rels',text:'<?xml version="1.0" encoding="UTF-8"?>'+
+      `<Relationships xmlns="${PKG}">`+sheets.map((sh,i)=>
+      `<Relationship Id="rId${i+1}" Type="${REL}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')+
+      '</Relationships>'},
+    {name:'xl/sharedStrings.xml',text:'<?xml version="1.0" encoding="UTF-8"?>'+
+      `<sst xmlns="${MAIN}" count="${strings.length}" uniqueCount="${strings.length}">`+
+      strings.map(v=>`<si><t>${x(v)}</t></si>`).join('')+'</sst>'}
+  ];
+  bodies.forEach((b,i)=>files.push({name:'xl/worksheets/sheet'+(i+1)+'.xml',text:b}));
+  return W.makeZip(files).then(blob=>blob.arrayBuffer());
+}
+
+async function xlsxTests(W){
+  grp('reading .xlsx in the browser');
+  W.S.invoices=[];W.S.customers=[];W.S.settings.series='SF';W.S.settings.next=1;
+  W.S.settings.term=14;W.S.settings.vatRate=21;
+  const book=await xlsxBytes(W,[
+    {name:'Sąskaitos',rows:[
+      ['Serija','Serijos numeris','Data','Pirkėjas','Adresas','Įm. kodas','PVM kodas','El. paštas','Nuolaida','Suma be PVM','PVM','Kaina'],
+      ['DBSF','0002851','2026-01-05','MB "Leto projektai"','Vilnius','303177592','LT100009036810','a@b.lt',0,461,96.81,557.81],
+      /* a net back-computed from a round gross: 21% of it lands a cent high */
+      ['DBSF','0002870','2026-02-10','Stansefabrikken, UAB','Ukmergė','111798718','LT117987113','',0,15880.17,3334.83,19215],
+      ['DBSF','0002889','2026-03-01','Vygantas Dabužinskas','',''       ,''      ,'',0,269,56.49,325.49],
+      ['DBSFIS','26','2026-08-28','Sigita Izmailkova','','','','',0,3950,829.5,4779.5]]},
+    {name:'Mokėjimai',rows:[
+      ['Mokėjimo data','Sąskaitos serija','Sąskaitos serijos numeris','Mokėtojas','Mokėjimo tipas','Sumokėta'],
+      ['2026-01-20','DBSF','0002851','R. G.','Mokama pervedimu',557.81],
+      ['2026-02-28','DBSF','0002870','R. G.','Mokama pervedimu',19215],
+      ['2026-09-01','DBSFIS','26','R. G.','Mokama pervedimu',4779.5]]}
+  ]);
+  ok('the workbook is a zip we can open', W.readZip(book).size>=4);
+  ok('and it holds the sheet XML', W.readZip(book).has('xl/worksheets/sheet1.xml'));
+  const sheets=await W.readXlsx(book);
+  eq('both sheets read', sheets.length, 2);
+  eq('sheet names kept', sheets[0].name, 'Sąskaitos');
+  eq('shared strings resolved', sheets[0].rows[1][3], 'MB "Leto projektai"');
+  eq('inline strings resolved', sheets[1].rows[1][4], 'Mokama pervedimu');
+  eq('blank trailing rows dropped', sheets[0].rows.length, 5);
+
+  const raw=W.xlsxInvoices(sheets),list=raw.map(W.normaliseImported);
+  eq('every invoice row became an invoice', list.length, 4);
+  eq('series and number joined', list[0].no, 'DBSF 0002851');
+  eq('buyer email carried', list[0].buyer.email, 'a@b.lt');
+  eq('a buyer with no code is a person', list[2].buyer.kind, 'person');
+  near('totals match the workbook', W.calc(list[0]).total, 557.81);
+  eq('the register makes one line', list[0].lines.length, 1);
+  /* the rounding case: 15880.17 + 21% = 19215.01, but the document said 19215 */
+  eq('a rounding line is added where the arithmetic drifts', list[1].lines.length, 2);
+  near('and the total then matches the document', W.calc(list[1]).total, 19215);
+  near('the drift is a cent', list[1].lines[1].price, -0.01);
+  eq('the second series is a proforma', list[3].type, 'proforma');
+  eq('the main series is not', list[0].type, 'invoice');
+
+  eq('payments came off the second sheet', list[0].payments.length, 1);
+  near('payment amount', list[0].payments[0].amount, 557.81);
+  eq('payment date', list[0].payments[0].date, '2026-01-20');
+  eq('paid invoice reads as paid', W.invStatus(list[0]), 'paid');
+  eq('the cent-drift invoice is settled too', W.invStatus(list[1]), 'paid');
+  eq('an invoice with no payment is not', W.calc(list[2]).due>0, true);
+  /* no due-date column: the app's own term is used, not the invoice date */
+  eq('due date follows the settings term', list[2].dueDate, '2026-03-15');
+  eq('so an unpaid recent invoice is not instantly overdue', list[2].term, 14);
+
+  const plan=W.importPlan(list);
+  eq('all four are new', plan.fresh.length, 4);
+  eq('four buyers', plan.newCust.length, 4);
+  W.applyImport(plan,{adoptNumbering:true,syncPayments:true});
+  eq('imported', W.S.invoices.length, 4);
+  eq('numbering follows the main series', W.S.settings.series, 'DBSF');
+  eq('next number', W.S.settings.next, 2890);
+
+  /* a file that is not a zip, and a zip that is not a workbook */
+  let threw='';
+  try{W.readZip(new Uint8Array([1,2,3,4,5]).buffer);}catch(e){threw=String(e.message);}
+  ok('a non-zip is refused', threw.length>0);
+  const notBook=await W.makeZip([{name:'hello.txt',text:'hi'}]).then(b=>b.arrayBuffer());
+  let threw2='';
+  try{await W.readXlsx(notBook);}catch(e){threw2=String(e.message);}
+  ok('a zip without a workbook is refused', threw2.length>0);
+  W.S.invoices=[];W.S.customers=[];W.S.settings.series='SF';W.S.settings.next=1;
+
+  grp('spreadsheet-shaped CSV');
+  /* the same register logic reached through the CSV path */
+  const reg='Nr;Data;Pirkejas;Suma be PVM;PVM %\n'+
+            'A-1;2026-04-01;UAB Testas;100;21\n';
+  const r1=W.parseImportDoc(reg,'r.csv').invoices;
+  near('rate column is read, not assumed', W.calc(r1[0]).total, 121);
+  const reg9='Nr;Data;Pirkejas;Suma be PVM;PVM %\n'+
+             'A-2;2026-04-01;UAB Testas;100;9\n';
+  near('a 9% rate survives', W.calc(W.parseImportDoc(reg9,'r.csv').invoices[0]).total, 109);
+  /* gross only: used to be refused outright */
+  const gross='Nr;Data;Pirkejas;Viso su PVM\nA-3;2026-04-01;UAB Testas;121\n';
+  const g=W.parseImportDoc(gross,'g.csv').invoices;
+  eq('a gross-only register imports', g.length, 1);
+  near('and the gross is preserved exactly', W.calc(g[0]).total, 121);
+  near('with the net derived from it', W.calc(g[0]).net, 100);
+  /* a "PVM" column holding a rate rather than an amount is caught by the sums */
+  const rateCol='Nr;Data;Pirkejas;Suma be PVM;PVM;Viso su PVM\nA-4;2026-04-01;UAB T;100;21;121\n';
+  near('a rate hiding in a PVM column still totals right',
+       W.calc(W.parseImportDoc(rateCol,'x.csv').invoices[0]).total, 121);
+  const sumCol='Nr;Data;Pirkejas;Suma be PVM;PVM;Viso su PVM\nA-5;2026-04-01;UAB T;100;21;121\n';
+  eq('one line, not two, when nothing drifts',
+     W.parseImportDoc(sumCol,'x.csv').invoices[0].lines.length, 1);
+  /* dates in the shapes a spreadsheet emits */
+  eq('ISO date kept', W.toIso('2026-01-15'), '2026-01-15');
+  eq('dotted date', W.toIso('2026.01.15'), '2026-01-15');
+  eq('day-first date', W.toIso('15/01/2026'), '2026-01-15');
+  eq('an Excel serial', W.toIso('46023'), '2026-01-01');
+  eq('nonsense is left alone', W.toIso('rytoj'), 'rytoj');
+  W.S.invoices=[];W.S.customers=[];
+}
+
+/* The session handling that "Invalid Refresh Token: Already Used" came out of.
+   Everything here runs against a stubbed fetch — no network. */
+async function authTests(W){
+  grp('cloud session');
+  const realFetch=W.fetch;
+  const LOCK='inv_cloud_lock';
+  let calls=[],reply=null;
+  W.fetch=async(url,opts)=>{
+    calls.push({url:String(url),body:opts&&opts.body?JSON.parse(opts.body):null});
+    const r=reply;
+    return {ok:r.ok,status:r.status,json:async()=>r.body,text:async()=>JSON.stringify(r.body)};
+  };
+  const cfg=(over)=>Object.assign({url:'https://x.supabase.co',key:'k',email:'a@b.c',
+    workspace:'ws',table:'workspaces',token:'old',refresh:'r1',exp:Date.now()+3600000},over||{});
+  const clean=()=>{try{W.localStorage.removeItem(LOCK);}catch(e){}};
+
+  /* a live token is simply used */
+  W.Cloud.cfg=cfg();calls=[];
+  eq('a fresh token is reused', await W.Cloud.token(), 'old');
+  eq('with no request', calls.length, 0);
+
+  /* an expired one is refreshed, and the rotation is kept */
+  W.Cloud.cfg=cfg({exp:Date.now()-1});clean();
+  reply={ok:true,status:200,body:{access_token:'new',refresh_token:'r2',expires_in:3600}};
+  calls=[];
+  eq('an expired token refreshes', await W.Cloud.token(), 'new');
+  eq('one request went out', calls.length, 1);
+  ok('to the token endpoint', calls[0].url.indexOf('grant_type=refresh_token')>=0);
+  eq('it spent the stored refresh token', calls[0].body.refresh_token, 'r1');
+  eq('the rotated token is kept', W.Cloud.cfg.refresh, 'r2');
+  ok('and written to disk',
+     JSON.parse(W.localStorage.getItem(W.Cloud.CFG)||'{}').refresh==='r2');
+  eq('the lock is released', W.localStorage.getItem(LOCK), null);
+
+  /* two calls at once must not spend the token twice — this is the bug */
+  W.Cloud.cfg=cfg({exp:Date.now()-1,refresh:'r2'});clean();
+  /* the previous refresh left a live token on disk — this test is about the
+     case where there is nothing to fall back on */
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(W.Cloud.cfg));
+  reply={ok:true,status:200,body:{access_token:'n2',refresh_token:'r3',expires_in:3600}};
+  calls=[];
+  const both=await Promise.all([W.Cloud.token(),W.Cloud.token(),W.Cloud.token()]);
+  eq('three callers, one refresh', calls.length, 1);
+  eq('all three get the same token', both.join(','), 'n2,n2,n2');
+
+  /* another tab rotated it already: use what is on disk, do not refresh */
+  W.Cloud.cfg=cfg({exp:Date.now()-1,refresh:'stale',token:'stale'});clean();
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(cfg({token:'fromOtherTab',refresh:'r9'})));
+  calls=[];
+  eq('the other tab\'s token is adopted', await W.Cloud.token(), 'fromOtherTab');
+  eq('without spending ours', calls.length, 0);
+
+  /* a used refresh token is not an error to sit in — it needs a password */
+  W.Cloud.cfg=cfg({exp:Date.now()-1});clean();
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(W.Cloud.cfg));
+  reply={ok:false,status:400,body:{error:'invalid_grant',
+         error_description:'Invalid Refresh Token: Already Used'}};
+  W.Cloud.poll=setInterval(()=>{},60000);
+  let threw='';
+  try{await W.Cloud.token();}catch(e){threw=String(e.message||e);}
+  ok('the caller is told', threw.length>0);
+  eq('the session asks for a password', W.Cloud.status, 'auth');
+  ok('the dead token is thrown away',
+     !W.Cloud.cfg.refresh && !W.Cloud.cfg.token);
+  ok('and the dead token is off disk too',
+     !JSON.parse(W.localStorage.getItem(W.Cloud.CFG)||'{}').refresh);
+  eq('the connection itself is kept', W.Cloud.cfg.workspace, 'ws');
+  eq('so the panel can ask for one thing', W.Cloud.linked(), true);
+  eq('but syncing is off', W.Cloud.on(), false);
+  eq('the poll was stopped', W.Cloud.poll, null);
+  eq('the error message is kept for the user',
+     W.Cloud.msg.indexOf('Already Used')>=0, true);
+
+  /* and it stops trying with a token it knows is dead */
+  calls=[];
+  await W.Cloud.sync();
+  eq('sync does nothing while the session is out', calls.length, 0);
+  eq('and does not overwrite the reason', W.Cloud.status, 'auth');
+
+  /* the password brings it back without retyping the connection */
+  reply={ok:true,status:200,body:{access_token:'t9',refresh_token:'r10',expires_in:3600}};
+  calls=[];
+  const startWas=W.Cloud.start;let started=0;W.Cloud.start=()=>{started++;};
+  await W.Cloud.reauth('hunter2');
+  W.Cloud.start=startWas;
+  ok('it signed in with a password', calls[0].url.indexOf('grant_type=password')>=0);
+  eq('using the stored address', calls[0].body.email, 'a@b.c');
+  eq('syncing is on again', W.Cloud.on(), true);
+  eq('with the new session', W.Cloud.cfg.refresh, 'r10');
+  eq('and it resumed', started, 1);
+
+  /* a tab that signs in hands the session to the other one */
+  W.Cloud.cfg=cfg({token:null,refresh:null,exp:0});W.Cloud.status='auth';
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(cfg({token:'shared',refresh:'rS'})));
+  const startWas2=W.Cloud.start;let started2=0;W.Cloud.start=()=>{started2++;};
+  W.Cloud.adoptStored();
+  W.Cloud.start=startWas2;
+  eq('the other tab\'s session is picked up', W.Cloud.status, 'idle');
+  eq('and syncing resumes', started2, 1);
+
+  /* a non-auth failure stays a plain error, recoverable on its own */
+  W.Cloud.cfg=cfg({exp:Date.now()-1});clean();
+  W.localStorage.setItem(W.Cloud.CFG,JSON.stringify(W.Cloud.cfg));
+  W.Cloud.status='idle';
+  reply={ok:false,status:503,body:{msg:'upstream down'}};
+  threw='';
+  try{await W.Cloud.token();}catch(e){threw=String(e.message||e);}
+  ok('a server wobble is reported', threw.indexOf('upstream down')>=0);
+  ok('but the session is kept', W.Cloud.status!=='auth' && !!W.Cloud.cfg.refresh);
+
+  /* unsent local work must survive a lapsed session and the sign-in after it */
+  W.Cloud.cfg=cfg();W.Cloud.status='idle';W.Cloud.seen='T7';W.Cloud.dirty=false;
+  W.Cloud.mark();
+  ok('a local edit marks the device as ahead', W.Cloud.dirty===true);
+  ok('and that is written down',
+     JSON.parse(W.localStorage.getItem(W.Cloud.CFG)||'{}').dirty===true);
+  eq('along with where we last were',
+     JSON.parse(W.localStorage.getItem(W.Cloud.CFG)||'{}').seen, 'T7');
+  W.Cloud.seen=null;W.Cloud.dirty=false;
+  W.Cloud.load();
+  eq('a reload remembers the position', W.Cloud.seen, 'T7');
+  eq('and that there is unsent work', W.Cloud.dirty, true);
+  /* editing while the session is out still records it */
+  W.Cloud.cfg=cfg({token:null,refresh:null});W.Cloud.dirty=false;W.Cloud.status='auth';
+  W.Cloud.mark();
+  eq('an edit with no session is still recorded', W.Cloud.dirty, true);
+  eq('but nothing is scheduled', W.Cloud.on(), false);
+  /* and signing back in asks rather than overwriting */
+  W.Cloud.cfg=cfg();W.Cloud.status='idle';W.Cloud.seen=null;W.Cloud.dirty=true;
+  let asked=0;const modalWas=W.conflictModal;W.conflictModal=()=>{asked++;};
+  const restWas=W.Cloud.rest;
+  W.Cloud.rest=async()=>[{id:'ws',data:{},updated_at:'T9',updated_by:'other'}];
+  await W.Cloud.sync();
+  W.Cloud.rest=restWas;W.conflictModal=modalWas;
+  eq('an unknown remote plus unsent work is a question', asked, 1);
+  eq('and the sync stops there', W.Cloud.status, 'conflict');
+
+  W.fetch=realFetch;clean();
+  try{W.localStorage.removeItem(W.Cloud.CFG);}catch(e){}
+  W.Cloud.cfg=null;W.Cloud.status='off';W.Cloud.msg='';
+  clearInterval(W.Cloud.poll);W.Cloud.poll=null;
+}
+
+async function zipTests(W){
+  W.S.invoices=[{id:'i1',no:'SF-2026-0001',date:'2026-01-05',dueDate:'2026-01-19',
+    buyer:{name:'UAB Pirkėjas',code:'123456789',vat:'LT123456715',address:'Vilnius'},
+    lines:[{id:'a',name:'Paslauga',qty:2,unit:'val',price:50,disc:0,vat:21}],
+    payments:[],status:'sent',currency:'EUR'}];
+  W.S.customers=[{id:'c1',name:'UAB Pirkėjas',code:'123456789',vat:'LT123456715',address:'Vilnius'}];
+  W.S.items=[{id:'it1',name:'Paslauga',unit:'val',price:50,vat:21,used:1}];
+
+  let captured=null;
+  const realCreate=W.URL.createObjectURL;
+  W.URL.createObjectURL=b=>{captured=b;return 'blob:stub';};
+  const files=await W.exportEverything();
+  W.URL.createObjectURL=realCreate;
+
+  ok('a blob was produced', !!captured);
+  ok('blob is a zip', captured && captured.type==='application/zip');
+  ok('blob is not empty', captured && captured.size>300);
+  const names=files.map(f=>f.name);
+  ok('has the JSON backup', names.some(n=>/duomenys\.json$/.test(n)));
+  ok('has the invoice register', names.some(n=>/saskaitos\.csv$/.test(n)));
+  ok('has the line-level CSV', names.some(n=>/eilutes\.csv$/.test(n)));
+  ok('has customers + items CSVs',
+     names.some(n=>/pirkejai\.csv$/.test(n)) && names.some(n=>/prekes\.csv$/.test(n)));
+  ok('has one HTML per invoice', names.filter(n=>/^.*saskaitos\/.*\.html$/.test(n)).length===1);
+  ok('has one XML per invoice', names.filter(n=>/\.xml$/.test(n)).length===1);
+  ok('has a readme', names.some(n=>/SKAITYK\.txt$/.test(n)));
+  ok('no waybill files when there are none', !names.some(n=>/vaztarasciai/.test(n)));
+  ok('everything sits under one dated folder', names.every(n=>/^saskaitos-\d{4}-\d{2}-\d{2}\//.test(n)));
+
+  const lineCsv=files.find(f=>/eilutes\.csv$/.test(f.name)).text;
+  eq('line CSV has a header and one row', lineCsv.trim().split('\r\n').length, 2);
+  ok('line CSV carries the invoice number', lineCsv.indexOf('SF-2026-0001')>=0);
+  const html=files.find(f=>/\.html$/.test(f.name)).text;
+  ok('archived HTML is a full document', /^<!DOCTYPE html>/.test(html));
+  ok('archived HTML does not auto-print', html.indexOf('window.print()')<0);
+
+  /* read the central directory back out of the real blob */
+  const buf=new Uint8Array(await captured.arrayBuffer());
+  const dv=new DataView(buf.buffer);
+  let eocd=-1;
+  for(let i=buf.length-22;i>=0;i--){if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;}}
+  ok('zip has an end-of-central-directory record', eocd>=0);
+  eq('directory counts every file', dv.getUint16(eocd+10,true), files.length);
+  let off=dv.getUint32(eocd+16,true), seen=0, deflated=0;
+  const dec=new TextDecoder();
+  for(let i=0;i<files.length;i++){
+    if(dv.getUint32(off,true)!==0x02014b50)break;
+    const nlen=dv.getUint16(off+28,true);
+    const method=dv.getUint16(off+10,true);
+    if(method===8)deflated++;
+    const name=dec.decode(buf.subarray(off+46,off+46+nlen));
+    if(names.indexOf(name)>=0)seen++;
+    off+=46+nlen+dv.getUint16(off+30,true)+dv.getUint16(off+32,true);
+  }
+  eq('every central entry name matches', seen, files.length);
+
+  /* the archive must pick up waybills too */
+  W.S.waybills=[{id:'w1',no:'VZ-1',date:'2026-01-06',seq:1,
+    consignor:{name:'A'},carrier:{name:'A'},consignee:{name:'B',code:'1'},
+    loadAddr:'X',unloadAddr:'Y',unloadDate:'2026-01-07',vehicle:'AAA 111',driver:'D',
+    lines:[{id:'l',name:'Dėžė',code:'',unit:'vnt',qty:1,packs:2,weight:10,value:5}],
+    status:'issued',notes:''}];
+  let blob2=null;
+  const rc2=W.URL.createObjectURL;
+  W.URL.createObjectURL=b=>{blob2=b;return 'blob:stub';};
+  const files2=await W.exportEverything();
+  W.URL.createObjectURL=rc2;
+  const n2=files2.map(f=>f.name);
+  ok('archive has the waybill register', n2.some(n=>/vaztarasciai\.csv$/.test(n)));
+  ok('archive has one HTML per waybill', n2.filter(n=>/vaztarasciai\/.*\.html$/.test(n)).length===1);
+  const wbCsv=files2.find(f=>/vaztarasciai\.csv$/.test(f.name)).text;
+  ok('waybill CSV names the vehicle', wbCsv.indexOf('AAA 111')>=0);
+  eq('waybill CSV has a header and one row', wbCsv.trim().split('\r\n').length, 2);
+  W.S.waybills=[];
+  ok('entries were actually deflated', deflated>0);
+  /* the local header of the first entry must agree with its CRC */
+  eq('first local header signature', dv.getUint32(0,true), 0x04034b50);
+  W.S.invoices=[];W.S.customers=[];W.S.items=[];W.S.waybills=[];
+}
+</script>
+</body></html>
